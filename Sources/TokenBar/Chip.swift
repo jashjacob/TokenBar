@@ -37,6 +37,12 @@ struct Chip: Equatable, Identifiable {
         return "\(Int(percent.rounded()))%"
     }
 
+    /// Single unit (`5h`, `3d`) when the chip is too narrow for `4h59m`.
+    var compactCountdownText: String {
+        if let remaining { return Countdown.compact(remaining) }
+        return "\(Int(percent.rounded()))%"
+    }
+
     var touchTitle: String {
         "\(label) \(countdownText)"
     }
@@ -65,6 +71,16 @@ enum Countdown {
         let d = t / 86_400
         let h = (t % 86_400) / 3600
         return h > 0 ? "\(d)d\(h)h" : "\(d)d"
+    }
+
+    static func compact(_ interval: TimeInterval) -> String {
+        if interval.isNaN { return "—" }
+        if interval <= 0 { return "now" }
+        let t = Int(interval.rounded(.down))
+        if t < 60 { return "\(t)s" }
+        if t < 3600 { return "\(t / 60)m" }
+        if t < 86_400 { return "\(t / 3600)h" }
+        return "\(t / 86_400)d"
     }
 }
 

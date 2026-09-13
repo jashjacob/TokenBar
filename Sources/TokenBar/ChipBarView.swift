@@ -5,6 +5,13 @@ final class ChipBarView: NSButton {
     var chip: Chip {
         didSet { needsDisplay = true }
     }
+    var layoutWidth: CGFloat = 128 {
+        didSet {
+            guard oldValue != layoutWidth else { return }
+            invalidateIntrinsicContentSize()
+            needsDisplay = true
+        }
+    }
 
     private var celebratingUntil: Date?
     private var pulse: CGFloat = 1
@@ -14,14 +21,17 @@ final class ChipBarView: NSButton {
         celebratingUntil.map { $0 > Date() } ?? false
     }
 
-    init(chip: Chip) {
+    init(chip: Chip, layoutWidth: CGFloat = 128) {
         self.chip = chip
-        super.init(frame: NSRect(x: 0, y: 0, width: 128, height: 30))
+        self.layoutWidth = layoutWidth
+        super.init(frame: NSRect(x: 0, y: 0, width: layoutWidth, height: 30))
         title = ""
         isBordered = false
         bezelStyle = .regularSquare
         setButtonType(.momentaryChange)
         isEnabled = true
+        setContentHuggingPriority(.required, for: .horizontal)
+        setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
     func playReset() {
@@ -49,7 +59,7 @@ final class ChipBarView: NSButton {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    override var intrinsicContentSize: NSSize { NSSize(width: 128, height: 30) }
+    override var intrinsicContentSize: NSSize { NSSize(width: layoutWidth, height: 30) }
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -65,101 +75,103 @@ final class ChipBarView: NSButton {
             glow.fill()
         }
 
+        drawHeader(in: pad, tint: tint, celebrating: celebrating)
+        drawBar(in: pad, tint: tint, celebrating: celebrating)
+    }
+
+    /// Name (truncated) + tag on the left, countdown on the right. Time stays;
+    /// the name yields first, then the countdown shortens to `5h` / `3d`.
+    private func drawHeader(in pad: NSRect, tint: NSColor, celebrating: Bool) {
         let name = chip.shortName as NSString
-        let tag = chip.windowTag
-        let time = (celebrating ? "RESET" : chip.countdownText) as NSString
-
-        let nameFont = NSFont.systemFont(ofSize: 10, weight: .semibold)
-        let tagFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold)
-        let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
-
+        let tag = chip.windowTag.map { $0 as NSString }
         let nameAttrs: [NSAttributedString.Key: Any] = [
-            .font: nameFont,
+            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
             .foregroundColor: NSColor.white,
         ]
         let tagAttrs: [NSAttributedString.Key: Any] = [
-            .font: tagFont,
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
             .foregroundColor: tint,
         ]
         let timeAttrs: [NSAttributedString.Key: Any] = [
-            .font: celebrating ? NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold) : timeFont,
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: celebrating ? .bold : .medium),
             .foregroundColor: celebrating ? tint : NSColor.white.withAlphaComponent(0.92),
         ]
 
-        let timeSize = time.size(withAttributes: timeAttrs)
-        let timePoint = NSPoint(x: pad.maxX - timeSize.width, y: pad.minY + 1)
-        time.draw(at: timePoint, withAttributes: timeAttrs)
+        let tagSize = tag?.size(withAttributes: tagAttrs) ?? .zero
+        let tagReserve: CGFloat = tag == nil ? 0 : tagSize.width + 8
+        let fullTime = (celebrating ? "RESET" : chip.countdownText) as NSString
+        let compactTime = (celebrating ? "RESET" : chip.compactCountdownText) as NSString
+        let fullTimeW = fullTime.size(withAttributes: timeAttrs).width
+        let compactTimeW = compactTime.size(withAttributes: timeAttrs).width
 
-        var x = pad.minX
-        let nameSize = name.size(withAttributes: nameAttrs)
-        name.draw(at: NSPoint(x: x, y: pad.minY + 1), withAttributes: nameAttrs)
-        x += nameSize.width + 4
-
-        if let tag {
-            let tagString = tag as NSString
-            let tagSize = tagString.size(withAttributes: tagAttrs)
-            let pill = NSRect(
-                x: x - 1,
-                y: pad.minY,
-                width: tagSize.width + 6,
-                height: 13
-            )
-            let pillPath = NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3)
-            tint.withAlphaComponent(0.22).setFill()
-            pillPath.fill()
-            tagString.draw(
-                at: NSPoint(x: pill.minX + 3, y: pad.minY + 1),
-                withAttributes: tagAttrs
-            )
+        let minName: CGFloat = 20
+        let gap: CGFloat = 4
+        let time: NSString
+        let timeW: CGFloat
+        if celebrating || pad.width >= tagReserve + gap + fullTimeW + minName {
+            time = fullTime
+            timeW = fullTimeW
+        } else {
+            time = compactTime
+            timeW = compactTimeW
         }
 
+        var x = pad.minX
+        let nameBudget = pad.width - tagReserve - gap - timeW
+        if nameBudget >= 18 {
+            let para = NSMutableParagraphStyle()
+            para.lineBreakMode = .byTruncatingTail
+            var attrs = nameAttrs
+            attrs[.paragraphStyle] = para
+            let drawW = min(name.size(withAttributes: nameAttrs).width, nameBudget)
+            name.draw(in: NSRect(x: x, y: pad.minY + 1, width: drawW, height: 13), withAttributes: attrs)
+            x += drawW + 3
+        }
+
+        if let tag {
+            let pill = NSRect(x: x - 1, y: pad.minY, width: tagSize.width + 6, height: 13)
+            tint.withAlphaComponent(0.22).setFill()
+            NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3).fill()
+            tag.draw(at: NSPoint(x: pill.minX + 3, y: pad.minY + 1), withAttributes: tagAttrs)
+        }
+
+        time.draw(at: NSPoint(x: pad.maxX - timeW, y: pad.minY + 1), withAttributes: timeAttrs)
+    }
+
+    private func drawBar(in pad: NSRect, tint: NSColor, celebrating: Bool) {
         let percentText = (celebrating ? "" : String(format: "%.0f%%", chip.percent)) as NSString
         let percentAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
             .foregroundColor: tint,
         ]
         let percentSize = percentText.size(withAttributes: percentAttrs)
-        let percentGap: CGFloat = percentSize.width > 0 ? 5 : 0
-
+        let percentGap: CGFloat = percentSize.width > 0 ? 4 : 0
         let barHeight: CGFloat = 4
         let barRect = NSRect(
             x: pad.minX,
             y: pad.maxY - barHeight - 1,
-            width: max(20, pad.width - percentSize.width - percentGap),
+            width: max(16, pad.width - percentSize.width - percentGap),
             height: barHeight
         )
-        let track = NSBezierPath(roundedRect: barRect, xRadius: 2, yRadius: 2)
         NSColor.white.withAlphaComponent(0.16).setFill()
-        track.fill()
+        NSBezierPath(roundedRect: barRect, xRadius: 2, yRadius: 2).fill()
 
         let fillFraction = celebrating ? CGFloat(pulse) : CGFloat(min(max(chip.percent, 0), 100) / 100)
         let fillWidth = max(barHeight, barRect.width * fillFraction)
-        let fillRect = NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height)
-        let fill = NSBezierPath(roundedRect: fillRect, xRadius: 2, yRadius: 2)
         tint.setFill()
-        fill.fill()
+        NSBezierPath(roundedRect: NSRect(x: barRect.minX, y: barRect.minY, width: fillWidth, height: barRect.height), xRadius: 2, yRadius: 2).fill()
 
         if percentSize.width > 0 {
             percentText.draw(
-                at: NSPoint(
-                    x: pad.maxX - percentSize.width,
-                    y: barRect.minY - 4
-                ),
+                at: NSPoint(x: pad.maxX - percentSize.width, y: barRect.minY - 4),
                 withAttributes: percentAttrs
             )
         }
 
-        // TokenTracker "how much can be used by now" tick (even-burn pace).
         if !celebrating, chip.percent >= 5, let pace = chip.paceFraction {
-            let x = barRect.minX + barRect.width * CGFloat(pace)
-            let tick = NSRect(
-                x: x - 0.75,
-                y: barRect.minY - 2.5,
-                width: 1.5,
-                height: barHeight + 5
-            )
+            let tickX = barRect.minX + barRect.width * CGFloat(pace)
             tint.setFill()
-            NSBezierPath(rect: tick).fill()
+            NSBezierPath(rect: NSRect(x: tickX - 0.75, y: barRect.minY - 2.5, width: 1.5, height: barHeight + 5)).fill()
         }
     }
 

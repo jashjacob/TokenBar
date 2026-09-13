@@ -7,9 +7,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var chips: [Chip] = []
     private var today: TodayUsage?
     private var stripBot: StripBotView?
-    private var todayTokenView: TodayBarView?
-    private var todayCostView: TodayBarView?
-    private var chipViews: [NSTouchBarItem.Identifier: ChipBarView] = [:]
+    private var stripView: TouchBarStripView?
     private var installedStrip = false
     private var presented = false
     private var reassertWork: DispatchWorkItem?
@@ -70,31 +68,18 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func update(chips: [Chip], today: TodayUsage?, offline: Bool) {
-        let ordered = chips.sorted { a, b in
-            let a5 = a.windowTag == "5h"
-            let b5 = b.windowTag == "5h"
-            if a5 != b5 { return a5 }
-            return (a.remaining ?? .greatestFiniteMagnitude) < (b.remaining ?? .greatestFiniteMagnitude)
-        }
-        let visible = ordered.filter { ChipPreferences.isVisible($0.id) }
+        let visible = ChipLayout.ordered(chips).filter { ChipPreferences.isVisible($0.id) }
         let next = offline ? [Chip(id: "offline", label: "TT off", percent: 100, resetAt: nil, windowSeconds: nil)] : visible
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
         let resetIDs = offline ? [] : detectResets(in: next)
-        let idsChanged = next.map(\.id) != self.chips.map(\.id)
-            || (self.today != nil) != (today != nil)
-            || (self.todayTokenView != nil) != showTokens
-            || (self.todayCostView != nil) != showCost
         self.chips = next
         self.today = today
-        if idsChanged {
-            rebuildBar()
-            if isPinned || presented {
-                presentExpanded()
-            }
-        } else {
-            refreshTitles()
+        if bar == nil { rebuildBar() }
+        if stripView == nil, isPinned || presented {
+            presentExpanded()
         }
+        stripView?.apply(chips: next, today: today, showTokens: showTokens, showCost: showCost)
         refreshStripTitle(offline: offline)
         if !resetIDs.isEmpty {
             if isPinned { presentExpanded() }
@@ -105,7 +90,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func tick() {
-        refreshTitles()
+        stripView?.tick(chips: chips, today: today)
         refreshStripTitle(offline: chips.first?.id == "offline")
     }
 
@@ -124,66 +109,30 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         Log.line("control strip item installed")
     }
 
+    private static let mainStripID = NSTouchBarItem.Identifier("com.jashjacob.TokenBar.mainStrip")
+
     private func rebuildBar() {
         let bar = NSTouchBar()
         bar.delegate = self
         bar.customizationIdentifier = NSTouchBar.CustomizationIdentifier("com.jashjacob.TokenBar.bar")
-        var ids: [NSTouchBarItem.Identifier] = []
-        if today != nil, ChipPreferences.isVisible(ChipPreferences.todayTokensID) {
-            ids.append(TodayMetric.tokens.itemID)
-        }
-        if today != nil, ChipPreferences.isVisible(ChipPreferences.todayCostID) {
-            ids.append(TodayMetric.cost.itemID)
-        }
-        for chip in chips {
-            ids.append(chipItemID(chip.id))
-        }
-        bar.defaultItemIdentifiers = ids
+        bar.defaultItemIdentifiers = [Self.mainStripID]
         self.bar = bar
-        chipViews.removeAll()
-        todayTokenView = nil
-        todayCostView = nil
+        stripView = nil
     }
 
     func touchBar(_ touchBar: NSTouchBar, makeItemForIdentifier identifier: NSTouchBarItem.Identifier) -> NSTouchBarItem? {
-        if let today, identifier == TodayMetric.tokens.itemID {
-            return makeTodayItem(metric: .tokens, usage: today)
-        }
-        if let today, identifier == TodayMetric.cost.itemID {
-            return makeTodayItem(metric: .cost, usage: today)
-        }
-        guard let chip = chips.first(where: { chipItemID($0.id) == identifier }) else { return nil }
+        guard identifier == Self.mainStripID else { return nil }
         let item = NSCustomTouchBarItem(identifier: identifier)
-        let view = ChipBarView(chip: chip)
-        view.target = self
-        view.action = #selector(chipClicked)
+        let view = TouchBarStripView(frame: NSRect(x: 0, y: 0, width: 680, height: 30))
+        view.onChipTap = { [weak self] in self?.chipClicked() }
+        view.onTodayTap = { [weak self] in self?.todayClicked() }
+        let showTokens = today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
+        let showCost = today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
+        view.apply(chips: chips, today: today, showTokens: showTokens, showCost: showCost)
         item.view = view
-        chipViews[identifier] = view
+        item.visibilityPriority = .high
+        stripView = view
         return item
-    }
-
-    private func makeTodayItem(metric: TodayMetric, usage: TodayUsage) -> NSTouchBarItem {
-        let item = NSCustomTouchBarItem(identifier: metric.itemID)
-        let view = TodayBarView(usage: usage, metric: metric)
-        view.target = self
-        view.action = #selector(todayClicked)
-        item.view = view
-        switch metric {
-        case .tokens: todayTokenView = view
-        case .cost: todayCostView = view
-        }
-        return item
-    }
-
-    private func refreshTitles() {
-        if let today {
-            todayTokenView?.usage = today
-            todayCostView?.usage = today
-        }
-        for chip in chips {
-            let id = chipItemID(chip.id)
-            chipViews[id]?.chip = chip
-        }
     }
 
     private func refreshStripTitle(offline: Bool) {
@@ -259,15 +208,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     private func celebrate(_ ids: [String]) {
+        stripView?.playReset(ids)
         for id in ids {
-            chipViews[chipItemID(id)]?.playReset()
             Log.line("reset effect: \(id)")
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         stripBot?.playReset()
-    }
-
-    private func chipItemID(_ id: String) -> NSTouchBarItem.Identifier {
-        NSTouchBarItem.Identifier("com.jashjacob.TokenBar.chip.\(id)")
     }
 }

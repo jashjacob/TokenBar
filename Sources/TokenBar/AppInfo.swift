@@ -3,7 +3,7 @@ import Foundation
 enum AppInfo {
     static let name = "TokenBar"
     static let version = "1.1.0"
-    static let build = "9"
+    static let build = "14"
     static let author = "Jash Jacob"
 
     static var versionLine: String { "Version \(version)" }
