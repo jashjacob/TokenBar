@@ -47,6 +47,8 @@ You need **two apps** and a **MacBook with a Touch Bar**.
 
 TokenBar will not show any chips until TokenTracker is installed **and running**.
 
+The supported way to install TokenBar is **clone and build on the Mac that will run it**. A local build is not quarantined, so Gatekeeper does not block it. The GitHub DMG is unsigned (ad-hoc) and is optional.
+
 ---
 
 ### 1. Install TokenTracker
@@ -88,29 +90,9 @@ If that fails, TokenBar’s Control Strip bot turns red and the menu says TokenT
 
 ---
 
-### 2. Install TokenBar
+### 2. Install TokenBar (recommended)
 
-**For users who don't want to build from source:**
-
-1. **Download** the latest `TokenBar-*.dmg` from [Releases](https://github.com/jashjacob/TokenBar/releases/latest)
-2. **Open** the disk image by double-clicking it
-3. **Move** `TokenBar.app` to your `/Applications` folder
-4. **Open the app.** Because it is **ad-hoc signed** (not notarized yet), macOS will likely block it with *“TokenBar can’t be opened because Apple cannot check it for malicious software.”*
-5. Allow it once:
-
-   - System Settings → **Privacy & Security** → **Open Anyway**, or
-   - Right-click `TokenBar.app` → **Open**, or
-   - Terminal:
-
-     ```bash
-     xattr -cr /Applications/TokenBar.app
-     ```
-
-6. **First launch:** the TokenBar bot appears in the Control Strip. Tap it to expand the quota chips. The same bot sits in the menu bar.
-
-> This release is **not** signed with an Apple Developer ID and is **not** notarized. A downloaded copy is treated as an unidentified developer. Building from source on this Mac (below) skips that warning, because a local build is not quarantined.
-
-**Recommended until notarization:** compile on the Mac that will run it.
+**Requirements:** a Touch Bar Mac (see [Hardware](#hardware)), macOS 13+, TokenTracker already running on port `7680`, and [Xcode Command Line Tools](https://developer.apple.com/download/all/) (`swift --version` — full Xcode.app is not required).
 
 ```bash
 xcode-select --install          # once, if `swift` is missing
@@ -119,41 +101,31 @@ cd TokenBar
 ./scripts/install.sh
 ```
 
-That builds a release `.app`, copies it to `/Applications/TokenBar.app`, and launches it. Run `./scripts/install.sh` again after a `git pull`.
+That builds a release `.app`, ad-hoc signs it, copies it to `/Applications/TokenBar.app`, and launches it. The TokenBar bot appears in the Control Strip and the menu bar. Tap the Control Strip bot to expand the quota chips.
 
----
-
-### Build on your own
-
-**Requirements:**
-
-- A MacBook **with a Touch Bar** (see [Hardware](#hardware))
-- macOS 13+ (Ventura or later)
-- [TokenTracker](https://github.com/xiufengsun/TokenTracker) installed and running on port `7680`
-- [Xcode Command Line Tools](https://developer.apple.com/download/all/) — full Xcode.app is **not** required
-- Swift 5.9+ (`swift --version`)
-
-**Build instructions:**
-
-- Script: run [`scripts/install.sh`](scripts/install.sh) to build, ad-hoc sign, and install to `/Applications`
-- Or: `swift build -c release` then [`scripts/package-app.sh`](scripts/package-app.sh) — output is `dist/TokenBar.app`
-- DMG for a GitHub Release: [`scripts/release.sh`](scripts/release.sh) → `dist/TokenBar-<version>.dmg`
-
-**Example:**
+Update later:
 
 ```bash
-git clone https://github.com/jashjacob/TokenBar.git
 cd TokenBar
+git pull
 ./scripts/install.sh
 ```
 
-One-shot dump (TokenTracker must already be up):
-
-```bash
-swift run TokenBar --once
-```
-
 Logs: `~/Library/Logs/TokenBar.log`
+
+Other build commands (from the repo root, TokenTracker must already be up):
+
+- `swift build -c release` then [`scripts/package-app.sh`](scripts/package-app.sh) → `dist/TokenBar.app`
+- [`scripts/release.sh`](scripts/release.sh) → `dist/TokenBar-<version>.dmg`
+- `swift run TokenBar --once` — one-shot dump, no menu bar
+
+---
+
+### 3. Disk image (optional)
+
+The [Releases](https://github.com/jashjacob/TokenBar/releases/latest) DMG is **not** Developer ID signed and **not** notarized. macOS will usually block a downloaded copy (*“Apple cannot check it for malicious software”*). Prefer step 2.
+
+If you still use the DMG: open it, drag `TokenBar.app` to `/Applications`, then System Settings → **Privacy & Security** → **Open Anyway**, or right-click → **Open**, or `xattr -cr /Applications/TokenBar.app`.
 
 ## Hardware
 
@@ -185,6 +157,34 @@ The 2016 two-port and 2017 two-port 13" models never had a Touch Bar.
 If the strip is in the way of Terminal’s Touch Bar, tap the system **X** on the left. Tap the bot to bring TokenBar back.
 
 Default port is **7680**. Override with `defaults write com.jashjacob.TokenBar tokenTrackerPort -int <port>`.
+
+## For coding agents
+
+Follow this when asked to install or set up TokenBar. Do not download `TokenBar-*.dmg`.
+
+TokenBar does **not** track usage. It polls TokenTracker on `127.0.0.1`. Do **not** clone or vendor [TokenTracker](https://github.com/xiufengsun/TokenTracker) unless the user asks; only make sure it is running.
+
+1. **Host.** macOS 13+ and a Touch Bar Mac (`sysctl -n hw.model`). If the model has no Touch Bar, stop and say so. Full Xcode is not required; `swift` from Command Line Tools is.
+2. **TokenTracker must answer.** Run:
+
+   ```bash
+   curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:7680/functions/tokentracker-usage-limits
+   ```
+
+   Expect `200`. If it fails: open `/Applications/TokenTracker.app` if present; else `brew install --cask xiufengsun/tokentracker/tokentracker && open /Applications/TokenTracker.app`; else `npm i -g tokentracker-cli && tokentracker serve --no-open`. Retry curl until `200`. Do not start TokenBar first.
+3. **Swift.** If `swift` is missing, run `xcode-select --install` and wait. Do not switch TokenBar’s ad-hoc sign to an Apple Development identity.
+4. **Install TokenBar** from this repo (clone if needed):
+
+   ```bash
+   git clone https://github.com/jashjacob/TokenBar.git
+   cd TokenBar
+   ./scripts/install.sh
+   ```
+
+   That kills any old TokenBar, writes `/Applications/TokenBar.app`, and launches it.
+5. **Verify.** `pgrep -x TokenBar` is non-empty. `~/Library/Logs/TokenBar.log` has a `TokenBar <version> (<build>) starting` line. The Control Strip bot should appear; chips stay empty until TokenTracker is up.
+
+Port override (only if the user asked): `defaults write com.jashjacob.TokenBar tokenTrackerPort -int <port>`. Default is `7680`.
 
 ## How it talks to TokenTracker
 
