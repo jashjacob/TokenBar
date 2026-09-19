@@ -81,8 +81,15 @@ final class ChipBarView: NSButton {
 
     /// Name (truncated) + tag on the left, countdown on the right. Time stays;
     /// the name yields first, then the countdown shortens to `5h` / `3d`.
+    /// Full name if it fits; CmdCode/OpenCode become CC/OC. Claude and friends stay whole.
+    private static func name(for chip: Chip, budget: CGFloat, attrs: [NSAttributedString.Key: Any]) -> NSString {
+        let full = chip.shortName as NSString
+        if full.size(withAttributes: attrs).width <= budget { return full }
+        if let compact = chip.compactName { return compact as NSString }
+        return full
+    }
+
     private func drawHeader(in pad: NSRect, tint: NSColor, celebrating: Bool) {
-        let name = chip.shortName as NSString
         let tag = chip.windowTag.map { $0 as NSString }
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
@@ -104,7 +111,8 @@ final class ChipBarView: NSButton {
         let fullTimeW = fullTime.size(withAttributes: timeAttrs).width
         let compactTimeW = compactTime.size(withAttributes: timeAttrs).width
 
-        let minName: CGFloat = 20
+        let fullNameW = (chip.shortName as NSString).size(withAttributes: nameAttrs).width
+        let minName: CGFloat = chip.compactName == nil ? fullNameW : 16
         let gap: CGFloat = 4
         let time: NSString
         let timeW: CGFloat
@@ -117,14 +125,18 @@ final class ChipBarView: NSButton {
         }
 
         var x = pad.minX
-        let nameBudget = pad.width - tagReserve - gap - timeW
-        if nameBudget >= 18 {
-            let para = NSMutableParagraphStyle()
-            para.lineBreakMode = .byTruncatingTail
+        let nameBudget = max(0, pad.width - tagReserve - gap - timeW)
+        let shown = Self.name(for: chip, budget: nameBudget, attrs: nameAttrs)
+        let shownW = shown.size(withAttributes: nameAttrs).width
+        let drawW = chip.compactName == nil ? shownW : min(shownW, nameBudget)
+        if drawW >= 1 {
             var attrs = nameAttrs
-            attrs[.paragraphStyle] = para
-            let drawW = min(name.size(withAttributes: nameAttrs).width, nameBudget)
-            name.draw(in: NSRect(x: x, y: pad.minY + 1, width: drawW, height: 13), withAttributes: attrs)
+            if chip.compactName != nil {
+                let para = NSMutableParagraphStyle()
+                para.lineBreakMode = .byTruncatingTail
+                attrs[.paragraphStyle] = para
+            }
+            shown.draw(in: NSRect(x: x, y: pad.minY + 1, width: drawW, height: 13), withAttributes: attrs)
             x += drawW + 3
         }
 

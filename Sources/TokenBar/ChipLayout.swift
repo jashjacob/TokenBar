@@ -33,7 +33,12 @@ enum ChipLayout {
     }
 
     static func contentWidth(for chip: Chip, compact: Bool = false) -> CGFloat {
-        let nameW = (chip.shortName as NSString).size(withAttributes: [
+        contentWidth(for: chip, abbrevNames: compact, compactTime: compact)
+    }
+
+    static func contentWidth(for chip: Chip, abbrevNames: Bool, compactTime: Bool) -> CGFloat {
+        let name = (abbrevNames ? chip.compactName : nil) ?? chip.shortName
+        let nameW = (name as NSString).size(withAttributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
         ]).width
         var inner = nameW
@@ -43,15 +48,15 @@ enum ChipLayout {
             ]).width + 6
             inner += 3 + tagW
         }
-        let time = compact ? chip.compactCountdownText : chip.countdownText
+        let time = compactTime ? chip.compactCountdownText : chip.countdownText
         let timeW = (time as NSString).size(withAttributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
         ]).width
         return ceil(10 + inner + 6 + timeW)
     }
 
-    /// Hug each chip's own text. `budget` is the width left for chips after Today.
-    /// The overflow path always sums to <= budget so cards cannot paint past the strip.
+    /// Hug each chip's text. CmdCode/OpenCode can shrink to CC/OC. Claude, Codex,
+    /// Grok never go below their full name — extra cards clip off the right instead.
     static func sized(_ chips: [Chip], budget: CGFloat) -> [String: CGFloat] {
         guard !chips.isEmpty else { return [:] }
         let maxExtra: CGFloat
@@ -60,40 +65,30 @@ enum ChipLayout {
         case 3, 4: maxExtra = 6
         default: maxExtra = 0
         }
-        if let fitted = fit(chips, budget: budget, compact: false, maxExtra: maxExtra) { return fitted }
-        if let fitted = fit(chips, budget: budget, compact: true, maxExtra: 0) { return fitted }
-        return scaleToBudget(chips, budget: max(0, budget))
-    }
-
-    /// Proportional widths that always sum to at most `budget`. No per-chip floor.
-    private static func scaleToBudget(_ chips: [Chip], budget: CGFloat) -> [String: CGFloat] {
-        let weights = chips.map { max(1, contentWidth(for: $0, compact: true)) }
-        let total = weights.reduce(0, +)
-        guard total > 0, budget > 0 else {
-            return Dictionary(uniqueKeysWithValues: chips.map { ($0.id, CGFloat(0)) })
+        if let fitted = pack(chips, budget: budget, abbrevNames: false, compactTime: false, maxExtra: maxExtra) {
+            return fitted
         }
-        var widths = weights.map { ($0 * budget / total).rounded(.down) }
-        var remain = budget - widths.reduce(0, +)
-        var i = 0
-        while remain >= 1, i < widths.count {
-            widths[i] += 1
-            remain -= 1
-            i += 1
+        if let fitted = pack(chips, budget: budget, abbrevNames: false, compactTime: true, maxExtra: 0) {
+            return fitted
+        }
+        if let fitted = pack(chips, budget: budget, abbrevNames: true, compactTime: true, maxExtra: 0) {
+            return fitted
         }
         var out: [String: CGFloat] = [:]
-        for (chip, width) in zip(chips, widths) {
-            out[chip.id] = width
+        for chip in chips {
+            out[chip.id] = contentWidth(for: chip, abbrevNames: true, compactTime: true)
         }
         return out
     }
 
-    private static func fit(
+    private static func pack(
         _ chips: [Chip],
         budget: CGFloat,
-        compact: Bool,
+        abbrevNames: Bool,
+        compactTime: Bool,
         maxExtra: CGFloat
     ) -> [String: CGFloat]? {
-        let tights = chips.map { contentWidth(for: $0, compact: compact) }
+        let tights = chips.map { contentWidth(for: $0, abbrevNames: abbrevNames, compactTime: compactTime) }
         let total = tights.reduce(0, +)
         guard total <= budget else { return nil }
         let extra = min(maxExtra, (budget - total) / CGFloat(chips.count))

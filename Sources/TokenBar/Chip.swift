@@ -32,6 +32,15 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
+    /// Used when the chip is too narrow for `shortName` (`Command Code` → `CC`).
+    var compactName: String? {
+        switch shortName {
+        case "CmdCode", "Command Code": return "CC"
+        case "OpenCode": return "OC"
+        default: return nil
+        }
+    }
+
     var countdownText: String {
         if let remaining { return Countdown.format(remaining) }
         return "\(Int(percent.rounded()))%"

@@ -67,6 +67,10 @@ enum ChipParser {
             WindowSpec(jsonKey: "secondary_window", label: "OpenCode wk", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
             WindowSpec(jsonKey: "tertiary_window", label: "OpenCode mo", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
         ]),
+        ProviderSpec(jsonKey: "commandCode", includeSecondary: true, windows: [
+            WindowSpec(jsonKey: "primary_window", label: "CmdCode 5h", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
+            WindowSpec(jsonKey: "secondary_window", label: "CmdCode wk", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
+        ]),
         ProviderSpec(jsonKey: "qoder", includeSecondary: true, windows: [
             WindowSpec(jsonKey: "primary_window", label: "Qoder", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
             WindowSpec(jsonKey: "secondary_window", label: "Qoder Ult", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),

@@ -1,19 +1,15 @@
 # TokenBar — agent notes
 
-Native macOS Touch Bar companion. Polls TokenTracker on `127.0.0.1`; do not clone TokenTracker.
+Touch Bar companion. Polls TokenTracker on `127.0.0.1`. Don’t clone TokenTracker.
 
-## Install and setup
+See **For coding agents** in [README.md](README.md).
 
-Follow **For coding agents** in [README.md](README.md). Short version:
+1. Touch Bar Mac, macOS 13+.
+2. TokenTracker HTTP 200 on `http://127.0.0.1:7680/functions/tokentracker-usage-limits` first.
+3. Don’t use the GitHub DMG.
+4. `./scripts/install.sh` (needs `swift` from Command Line Tools).
+5. `pgrep -x TokenBar` and `~/Library/Logs/TokenBar.log`.
 
-1. Confirm a Touch Bar Mac and macOS 13+.
-2. TokenTracker must return HTTP 200 on `http://127.0.0.1:7680/functions/tokentracker-usage-limits` before TokenBar.
-3. Do **not** use the GitHub DMG (ad-hoc signed; Gatekeeper blocks downloads).
-4. From this repo: `./scripts/install.sh` (needs `swift` from Xcode Command Line Tools, not full Xcode).
-5. Check `pgrep -x TokenBar` and `~/Library/Logs/TokenBar.log`.
+Keep ad-hoc signing. Don’t vendor TokenTracker.
 
-Do not change `codesign` to an Apple Development identity. Do not vendor TokenTracker.
-
-## Layout
-
-Quota chips live in `Sources/TokenBar/TouchBarStripView.swift` and `ChipLayout.swift`. Widths hug each chip’s text and must stay within the strip bounds (`clipsToBounds`).
+Chip layout: `TouchBarStripView.swift`, `ChipLayout.swift`. Stay inside the strip (`clipsToBounds`).
