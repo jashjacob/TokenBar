@@ -32,11 +32,11 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
-    /// Used when the chip is too narrow for `shortName` (`Command Code` → `CC`).
+    /// Used when the chip is too narrow for `shortName` (`CmdCode` → `CmdC`).
     var compactName: String? {
         switch shortName {
-        case "CmdCode", "Command Code": return "CC"
-        case "OpenCode": return "OC"
+        case "CmdCode", "Command Code": return "CmdC"
+        case "OpenCode": return "OpenC"
         default: return nil
         }
     }

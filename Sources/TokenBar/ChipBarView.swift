@@ -81,7 +81,7 @@ final class ChipBarView: NSButton {
 
     /// Name (truncated) + tag on the left, countdown on the right. Time stays;
     /// the name yields first, then the countdown shortens to `5h` / `3d`.
-    /// Full name if it fits; CmdCode/OpenCode become CC/OC. Claude and friends stay whole.
+    /// Full name if it fits; CmdCode/OpenCode become CmdC/OpenC. Claude and friends stay whole.
     private static func name(for chip: Chip, budget: CGFloat, attrs: [NSAttributedString.Key: Any]) -> NSString {
         let full = chip.shortName as NSString
         if full.size(withAttributes: attrs).width <= budget { return full }

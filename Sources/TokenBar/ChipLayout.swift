@@ -55,7 +55,7 @@ enum ChipLayout {
         return ceil(10 + inner + 6 + timeW)
     }
 
-    /// Hug each chip's text. CmdCode/OpenCode can shrink to CC/OC. Claude, Codex,
+    /// Hug each chip's text. CmdCode/OpenCode can shrink to CmdC/OpenC. Claude, Codex,
     /// Grok never go below their full name — extra cards clip off the right instead.
     static func sized(_ chips: [Chip], budget: CGFloat) -> [String: CGFloat] {
         guard !chips.isEmpty else { return [:] }
