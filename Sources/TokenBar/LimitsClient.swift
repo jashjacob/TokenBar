@@ -32,24 +32,38 @@ enum LimitsClient {
         } catch {
             trackerError = LimitsError.offline
         }
-        chips = await fill(chips, prefix: "commandCode.", loader: CommandCodeFallback.chips, log: "command code")
+        chips = await fill(
+            chips,
+            ids: ["commandCode.primary_window", "commandCode.secondary_window"],
+            loader: CommandCodeFallback.chips,
+            log: "command code"
+        )
+        chips = await fill(
+            chips,
+            ids: ["opencodeGo.primary_window", "opencodeGo.secondary_window", "opencodeGo.tertiary_window"],
+            loader: OpenCodeFallback.chips,
+            log: "opencode"
+        )
         if chips.isEmpty, let trackerError {
             throw trackerError
         }
         return chips
     }
 
+    /// Add only the windows TokenTracker left out. A weekly chip must not block the 5h chip.
     private static func fill(
         _ chips: [Chip],
-        prefix: String,
+        ids: [String],
         loader: () async -> [Chip],
         log: String
     ) async -> [Chip] {
-        if chips.contains(where: { $0.id.hasPrefix(prefix) }) { return chips }
+        let have = Set(chips.map(\.id))
+        guard ids.contains(where: { !have.contains($0) }) else { return chips }
         let extra = await loader()
-        guard !extra.isEmpty else { return chips }
-        Log.line("\(log) fallback: \(extra.map(\.touchTitle).joined(separator: " | "))")
-        return chips + extra
+        let missing = extra.filter { !have.contains($0.id) }
+        guard !missing.isEmpty else { return chips }
+        Log.line("\(log) fallback: \(missing.map(\.touchTitle).joined(separator: " | "))")
+        return chips + missing
     }
 
     static func discoverPort() -> Int {
