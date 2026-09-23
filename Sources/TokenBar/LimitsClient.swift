@@ -21,6 +21,10 @@ enum LimitsClient {
     static let path = "/functions/tokentracker-usage-limits"
     /// Usage JSON is tiny. Cap so a runaway local server cannot fill RAM.
     static let maxBodyBytes = 512_000
+    /// Missing windows are rechecked on this cadence, not on every TokenTracker poll.
+    private static let fallbackTTL: TimeInterval = 5 * 60
+    private static var fallbackCache: [String: (at: Date, chips: [Chip])] = [:]
+    static var refreshFallbacksNow = false
 
     static func fetch() async throws -> [Chip] {
         var chips: [Chip] = []
@@ -44,26 +48,54 @@ enum LimitsClient {
             loader: OpenCodeFallback.chips,
             log: "opencode"
         )
+        chips = await fill(
+            chips,
+            ids: ["grok.primary_window", "grok.secondary_window"],
+            loader: GrokFallback.chips,
+            log: "grok"
+        )
+        chips = await fill(
+            chips,
+            ids: ["cursor.primary_window"],
+            loader: CursorFallback.chips,
+            log: "cursor"
+        )
+        refreshFallbacksNow = false
         if chips.isEmpty, let trackerError {
             throw trackerError
         }
         return chips
     }
 
-    /// Add only the windows TokenTracker left out. A weekly chip must not block the 5h chip.
+    /// If TokenTracker is missing any window for this tool, the fallback owns all of them.
     private static func fill(
         _ chips: [Chip],
         ids: [String],
         loader: () async -> [Chip],
         log: String
     ) async -> [Chip] {
+        guard ChipPreferences.fallbacksEnabled else { return chips }
         let have = Set(chips.map(\.id))
         guard ids.contains(where: { !have.contains($0) }) else { return chips }
-        let extra = await loader()
-        let missing = extra.filter { !have.contains($0.id) }
-        guard !missing.isEmpty else { return chips }
-        Log.line("\(log) fallback: \(missing.map(\.touchTitle).joined(separator: " | "))")
-        return chips + missing
+        let now = Date()
+        let extra: [Chip]
+        let fetched: Bool
+        if !refreshFallbacksNow,
+           let cached = fallbackCache[log],
+           now.timeIntervalSince(cached.at) < fallbackTTL {
+            extra = cached.chips
+            fetched = false
+        } else {
+            extra = await loader()
+            fallbackCache[log] = (now, extra)
+            fetched = true
+        }
+        guard !extra.isEmpty else { return chips }
+        if fetched {
+            Log.line("\(log) fallback: \(extra.map(\.touchTitle).joined(separator: " | "))")
+        }
+        let owned = Set(ids)
+        return chips.filter { !owned.contains($0.id) } + extra
     }
 
     static func discoverPort() -> Int {

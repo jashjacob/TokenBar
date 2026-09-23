@@ -7,6 +7,16 @@ enum ChipPreferences {
     static let todayMetricIDs = [todayTokensID, todayCostID]
     private static let hiddenKey = "touchBarHiddenIDs"
     private static let migratedTodayKey = "migratedTodaySplit"
+    private static let fallbacksKey = "fallbacksEnabled"
+
+    /// Off means TokenBar never calls Command Code, OpenCode, or Grok itself.
+    static var fallbacksEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: fallbacksKey) != nil else { return true }
+            return UserDefaults.standard.bool(forKey: fallbacksKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: fallbacksKey) }
+    }
 
     /// Old combined Today chip → two independent tokens / cost chips.
     static func migrateTodaySplit() {

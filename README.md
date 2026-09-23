@@ -67,15 +67,15 @@ Default port is `7680`. To change it: `defaults write com.jashjacob.TokenBar tok
 
 ## Fallbacks
 
-TokenBar reads TokenTracker first. That feed sometimes comes back stale, empty, or with an error, so a chip disappears even though you are still signed in. A fallback asks the tool itself for the missing window. Command Code and OpenCode do that now. The others are still to come.
+TokenBar reads TokenTracker first. That feed sometimes comes back stale, empty, or with an error, so a chip disappears even though you are still signed in. A fallback asks the tool itself for the missing windows, and then owns every window for that tool. Command Code, OpenCode, Grok, and Cursor do that now. The others are still to come.
 
 | Tool | Fallback |
 |---|---|
 | Claude | Not yet |
-| Grok | Not yet |
+| Grok | In |
 | ChatGPT / Codex | Not yet |
 | Antigravity | Not yet |
-| Cursor | Not yet |
+| Cursor | In |
 | OpenCode | In |
 | Command Code | In |
 

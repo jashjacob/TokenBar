@@ -94,7 +94,7 @@ enum OpenCodeFallback {
         if percent > 0, percent < 1 { percent *= 100 }
         percent = min(max(percent, 0), 100)
         let reset = resetDate(source) ?? resetAfterSeconds(source)
-        return Chip(id: id, label: label, percent: percent, resetAt: reset, windowSeconds: windowSeconds)
+        return Chip(id: id, label: label, percent: percent, resetAt: reset, windowSeconds: windowSeconds, source: .fallback)
     }
 
     private static func resetDate(_ window: [String: Any]) -> Date? {

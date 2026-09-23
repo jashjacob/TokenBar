@@ -114,7 +114,8 @@ enum CommandCodeFallback {
             label: label,
             percent: percent,
             resetAt: resetDate(window["resetAt"] ?? window["reset_at"] ?? window["reset"]),
-            windowSeconds: windowSeconds
+            windowSeconds: windowSeconds,
+            source: .fallback
         )
     }
 

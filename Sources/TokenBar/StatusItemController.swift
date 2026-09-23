@@ -94,6 +94,10 @@ final class StatusItemController: NSObject {
             let hideAll = NSMenuItem(title: "Hide All", action: #selector(hideAllClicked), keyEquivalent: "")
             hideAll.target = self
             menu.addItem(hideAll)
+            let fallbacks = NSMenuItem(title: "Use fallbacks", action: #selector(toggleFallbacks), keyEquivalent: "")
+            fallbacks.target = self
+            fallbacks.state = ChipPreferences.fallbacksEnabled ? .on : .off
+            menu.addItem(fallbacks)
         }
         menu.addItem(.separator())
 
@@ -161,7 +165,18 @@ final class StatusItemController: NSObject {
         onVisibilityChange()
     }
 
-    @objc private func refreshClicked() { onRefresh() }
+    @objc private func refreshClicked() {
+        LimitsClient.refreshFallbacksNow = true
+        onRefresh()
+    }
+
+    @objc private func toggleFallbacks() {
+        ChipPreferences.fallbacksEnabled.toggle()
+        if ChipPreferences.fallbacksEnabled {
+            LimitsClient.refreshFallbacksNow = true
+        }
+        onRefresh()
+    }
 
     @objc private func openDashboard() {
         NSWorkspace.shared.open(LimitsClient.dashboardURL())
@@ -191,7 +206,10 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func aboutClicked() {
-        AboutPanel.shared.show()
+        var tracker = ChipSources.names(chips.filter { $0.source == .tokenTracker })
+        if today != nil { tracker.insert("Today", at: 0) }
+        let fallback = ChipSources.names(chips.filter { $0.source == .fallback })
+        AboutPanel.shared.show(tracker: tracker, fallback: fallback)
     }
 
     @objc private func quitClicked() {

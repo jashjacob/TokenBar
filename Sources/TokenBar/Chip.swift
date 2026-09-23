@@ -1,11 +1,42 @@
 import Foundation
 
+enum ChipSource: Equatable {
+    case tokenTracker
+    case fallback
+}
+
+enum ChipSources {
+    static func names(_ chips: [Chip]) -> [String] {
+        var seen: [String] = []
+        for chip in chips {
+            let name = providerName(chip.id)
+            if !seen.contains(name) { seen.append(name) }
+        }
+        return seen
+    }
+
+    static func providerName(_ id: String) -> String {
+        switch id.split(separator: ".").first.map(String.init) {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        case "cursor": return "Cursor"
+        case "grok": return "Grok"
+        case "opencodeGo": return "OpenCode"
+        case "commandCode": return "Command Code"
+        case "antigravity": return "Antigravity"
+        case "gemini": return "Gemini"
+        default: return id
+        }
+    }
+}
+
 struct Chip: Equatable, Identifiable {
     let id: String
     let label: String
     let percent: Double
     let resetAt: Date?
     let windowSeconds: Double?
+    var source: ChipSource = .tokenTracker
 
     var remaining: TimeInterval? {
         resetAt.map { $0.timeIntervalSinceNow }
