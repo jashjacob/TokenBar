@@ -131,14 +131,26 @@ enum ChipParser {
     }
 
     private static func isUsable(_ provider: [String: Any]) -> Bool {
-        if isStale(provider) { return false }
         if let configured = provider["configured"] as? Bool, configured == false {
             return false
         }
-        if let error = provider["error"] as? String, !error.isEmpty {
+        // TokenTracker 1.0 keeps last-good windows and marks the provider stale
+        // (or sets an error) when a live refresh fails. Show those numbers.
+        // Skip only a hard error with nothing to draw.
+        if let error = provider["error"] as? String, !error.isEmpty, !hasQuotaWindow(provider) {
             return false
         }
         return true
+    }
+
+    private static func hasQuotaWindow(_ provider: [String: Any]) -> Bool {
+        for value in provider.values {
+            guard let window = value as? [String: Any] else { continue }
+            if firstNumber(window, keys: ["used_percent", "utilization"]) != nil {
+                return true
+            }
+        }
+        return false
     }
 
     private static func isStale(_ dict: [String: Any]) -> Bool {

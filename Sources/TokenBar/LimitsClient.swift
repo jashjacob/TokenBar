@@ -23,13 +23,33 @@ enum LimitsClient {
     static let maxBodyBytes = 512_000
 
     static func fetch() async throws -> [Chip] {
+        var chips: [Chip] = []
+        var trackerError: Error?
         do {
-            return try ChipParser.parse(try await get(URL(string: "http://127.0.0.1:\(discoverPort())\(path)")!))
+            chips = try ChipParser.parse(try await get(URL(string: "http://127.0.0.1:\(discoverPort())\(path)")!))
         } catch let error as LimitsError {
-            throw error
+            trackerError = error
         } catch {
-            throw LimitsError.offline
+            trackerError = LimitsError.offline
         }
+        chips = await fill(chips, prefix: "commandCode.", loader: CommandCodeFallback.chips, log: "command code")
+        if chips.isEmpty, let trackerError {
+            throw trackerError
+        }
+        return chips
+    }
+
+    private static func fill(
+        _ chips: [Chip],
+        prefix: String,
+        loader: () async -> [Chip],
+        log: String
+    ) async -> [Chip] {
+        if chips.contains(where: { $0.id.hasPrefix(prefix) }) { return chips }
+        let extra = await loader()
+        guard !extra.isEmpty else { return chips }
+        Log.line("\(log) fallback: \(extra.map(\.touchTitle).joined(separator: " | "))")
+        return chips + extra
     }
 
     static func discoverPort() -> Int {
