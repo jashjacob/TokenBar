@@ -65,6 +65,20 @@ If the strip is in the way, tap the system **X**. Tap the bot to bring it back.
 
 Default port is `7680`. To change it: `defaults write com.jashjacob.TokenBar tokenTrackerPort -int <port>`.
 
+## Fallbacks
+
+TokenBar reads TokenTracker first. That feed sometimes comes back stale, empty, or with an error, so a chip disappears even though you are still signed in. A fallback asks the tool itself for the missing window. Command Code and OpenCode do that now. The others are still to come.
+
+| Tool | Fallback |
+|---|---|
+| Claude | Not yet |
+| Grok | Not yet |
+| ChatGPT / Codex | Not yet |
+| Antigravity | Not yet |
+| Cursor | Not yet |
+| OpenCode | In |
+| Command Code | In |
+
 ## Hardware
 
 Needs a MacBook Pro **with a Touch Bar**, on Ventura or later. Won’t show a strip on 14"/16" 2021+ Pros, Airs, minis, or Studios.
