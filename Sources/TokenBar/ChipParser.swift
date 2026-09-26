@@ -16,6 +16,7 @@ enum ChipParser {
         let jsonKey: String
         let includeSecondary: Bool
         let windows: [WindowSpec]
+        var also: [WindowSpec] = []
     }
 
     private static let providers: [ProviderSpec] = [
@@ -31,6 +32,8 @@ enum ChipParser {
         ]),
         ProviderSpec(jsonKey: "cursor", includeSecondary: false, windows: [
             WindowSpec(jsonKey: "primary_window", label: "Cursor", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
+        ], also: [
+            WindowSpec(jsonKey: "quaternary_window", label: "Grok Bot", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
         ]),
         ProviderSpec(jsonKey: "grok", includeSecondary: true, windows: [
             WindowSpec(jsonKey: "primary_window", label: "Grok 7d", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
@@ -100,6 +103,12 @@ enum ChipParser {
                     chips.append(chip)
                     if chips.count >= maxChips { return chips }
                     if !spec.includeSecondary { break }
+                }
+            }
+            for extra in spec.also {
+                if let chip = chip(from: provider[extra.jsonKey], spec: extra, id: "\(spec.jsonKey).\(extra.jsonKey)") {
+                    chips.append(chip)
+                    if chips.count >= maxChips { return chips }
                 }
             }
             if let scoped = provider["weekly_scoped"] as? [[String: Any]] {
