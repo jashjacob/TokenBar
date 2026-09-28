@@ -133,12 +133,6 @@
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-10px); }
     }
-    .eyebrow {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
-      color: var(--green);
-      animation: rise .8s ease both;
-    }
     h1 {
       font-weight: 500;
       font-size: clamp(52px, 8vw, 96px);
@@ -295,7 +289,14 @@
       border-radius: 16px;
       padding: 16px 88px 16px 18px;
       overflow: auto;
-      font-size: 14px;
+      white-space: pre-wrap;
+      overflow-wrap: normal;
+      word-break: normal;
+      hyphens: none;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 15px;
+      line-height: 1.7;
       margin: 0;
     }
     .copy {
@@ -312,6 +313,7 @@
       cursor: pointer;
     }
     .copy.done { color: var(--green); border-color: rgba(61,220,132,.5); }
+    .cmd .url { white-space: nowrap; }
     .need {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 16px;
@@ -331,12 +333,11 @@
       color: var(--ink);
     }
     .faq p { color: var(--muted); margin: 10px 0 0; }
+    .faq .cmd { margin-top: 14px; }
     table { width: 100%; border-collapse: collapse; font-family: -apple-system, sans-serif; font-size: 15px; }
     th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid var(--line); }
     th { color: var(--muted); font-weight: 500; }
-    .agents { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--muted); }
-    .agents ol { padding-left: 1.2rem; }
-    .agents code { color: var(--ink); }
+    .agents { color: var(--muted); }
     footer {
       padding: 48px 7vw 64px;
       text-align: center;
@@ -378,7 +379,6 @@
   </nav>
 
   <header class="hero">
-    <div class="eyebrow">MacBook Touch Bar</div>
     <h1>See the quota<br>before it runs out.</h1>
     <p class="which">Touch Bar companion for TokenTracker.</p>
     <p class="lede">Claude, Codex, Cursor, Grok, OpenCode, and Command Code, counting down on the Touch Bar. You see what’s left before the limit hits.</p>
@@ -414,7 +414,7 @@
     <h2>Install via command line</h2>
     <p class="need">A Mac with a Touch Bar. macOS 13 or later. <a href="https://github.com/xiufengsun/TokenTracker">TokenTracker</a> running.</p>
     <div class="cmd">
-      <button class="copy" type="button" id="copy">Copy</button>
+      <button class="copy" type="button" data-target="install-cmd">Copy</button>
       <pre><code id="install-cmd">git clone https://github.com/jashjacob/TokenBar.git
 cd TokenBar
 ./scripts/install.sh</code></pre>
@@ -426,7 +426,7 @@ cd TokenBar
     <div class="faq">
       <details>
         <summary>Which tools?</summary>
-        <p>Claude, Codex, Cursor, Grok, OpenCode, and Command Code. Cursor can also show Grok Bot on its own, even when the Cursor plan is empty.</p>
+        <p>Chips will be shown for Claude, Codex, Cursor, Grok, OpenCode, Command Code, and Grok Bot.</p>
       </details>
       <details>
         <summary>What if TokenTracker is empty?</summary>
@@ -434,7 +434,12 @@ cd TokenBar
       </details>
       <details>
         <summary>How do I update?</summary>
-        <p>From the TokenBar folder: <code>git pull</code>, then <code>./scripts/install.sh</code>.</p>
+        <p>From the TokenBar folder:</p>
+        <div class="cmd">
+          <button class="copy" type="button" data-target="update-cmd">Copy</button>
+          <pre><code id="update-cmd">git pull
+./scripts/install.sh</code></pre>
+        </div>
       </details>
       <details>
         <summary>How do I uninstall?</summary>
@@ -458,16 +463,16 @@ cd TokenBar
     </table>
   </section>
 
-  <section class="block">
+  <section class="block" id="agents">
     <h2>For coding agents</h2>
-    <div class="agents">
-      <p>Don’t download the disk image. Don’t clone TokenTracker unless asked.</p>
-      <ol>
-        <li>Touch Bar Mac, macOS 13 or later.</li>
-        <li>TokenTracker must return 200 from <code>http://127.0.0.1:7680/functions/tokentracker-usage-limits</code> before you install TokenBar.</li>
-        <li><code>./scripts/install.sh</code></li>
-        <li>Check <code>pgrep -x TokenBar</code> and <code>~/Library/Logs/TokenBar.log</code>.</li>
-      </ol>
+    <div class="cmd agents">
+      <button class="copy" type="button" data-target="agent-notes">Copy</button>
+      <pre><code id="agent-notes">Don’t download the disk image. Don’t clone TokenTracker unless asked.
+
+1. Touch Bar Mac, macOS 13 or later.
+2. TokenTracker must return 200 from <span class="url">http://127.0.0.1:7680/functions/tokentracker-usage-limits</span> before you install TokenBar.
+3. ./scripts/install.sh
+4. Check pgrep -x TokenBar and ~/Library/Logs/TokenBar.log.</code></pre>
     </div>
   </section>
 
@@ -525,25 +530,26 @@ cd TokenBar
       spot.style.setProperty("--x", e.clientX + "px");
       spot.style.setProperty("--y", e.clientY + "px");
     });
-    document.getElementById("copy").addEventListener("click", async () => {
-      const button = document.getElementById("copy");
-      const text = document.getElementById("install-cmd").innerText;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const area = document.createElement("textarea");
-        area.value = text;
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand("copy");
-        area.remove();
-      }
-      button.textContent = "Copied";
-      button.classList.add("done");
-      setTimeout(() => {
-        button.textContent = "Copy";
-        button.classList.remove("done");
-      }, 1600);
+    document.querySelectorAll(".copy").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const text = document.getElementById(button.dataset.target).innerText;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        button.textContent = "Copied";
+        button.classList.add("done");
+        setTimeout(() => {
+          button.textContent = "Copy";
+          button.classList.remove("done");
+        }, 1600);
+      });
     });
     fetch("https://api.github.com/repos/jashjacob/TokenBar")
       .then((r) => r.json())
