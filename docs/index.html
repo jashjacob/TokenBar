@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TokenBar — live AI quota on the MacBook Touch Bar</title>
+  <meta name="description" content="TokenBar shows Claude, Codex, Cursor, Grok, OpenCode, and Command Code countdowns on a MacBook Touch Bar. It reads TokenTracker on your Mac. No Xcode app required.">
+  <meta property="og:title" content="TokenBar — live AI quota on the Touch Bar">
+  <meta property="og:description" content="Countdowns, 5h and 7d tags, and today’s tokens. A small menu-bar app for MacBooks that still have a Touch Bar.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050607;
+      --ink: #f3f6f3;
+      --muted: #a3aea6;
+      --line: rgba(255,255,255,.1);
+      --ink: #f3f6f3;
+      --green: #3ddc84;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font: 17px/1.5 "Iowan Old Style", Palatino, Georgia, serif;
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+    a { color: inherit; }
+    .sky, .sky i, .grain, .spot {
+      position: fixed; inset: 0; pointer-events: none;
+    }
+    .sky { z-index: 0; }
+    .sky i {
+      display: block;
+      filter: blur(30px);
+      opacity: .85;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .sky i:nth-child(1) {
+      background: radial-gradient(ellipse at 20% 10%, rgba(61,220,132,.35), transparent 55%);
+    }
+    .sky i:nth-child(2) {
+      background: radial-gradient(ellipse at 80% 0%, rgba(90,140,255,.28), transparent 50%);
+      animation-duration: 24s;
+      animation-direction: alternate-reverse;
+    }
+    .sky i:nth-child(3) {
+      background: radial-gradient(ellipse at 50% 80%, rgba(240,150,70,.18), transparent 45%);
+      animation-duration: 28s;
+    }
+    .grain {
+      z-index: 1;
+      opacity: .18;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.55'/></svg>");
+    }
+    .spot {
+      z-index: 1;
+      background: radial-gradient(420px circle at var(--x, 50%) var(--y, 20%), rgba(255,255,255,.08), transparent 40%);
+    }
+    .nav, header, .stage, section, footer { position: relative; z-index: 2; }
+    .nav {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 7vw;
+      background: rgba(5,6,7,.55);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    .brand img {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: block;
+    }
+    .brand span {
+      font-family: Fraunces, "Iowan Old Style", Palatino, Georgia, serif;
+      font-size: 32px;
+      font-weight: 560;
+      letter-spacing: -.03em;
+      line-height: 1;
+    }
+    .nav a.btn {
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 14px;
+      background: rgba(255,255,255,.04);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav a.btn svg { display: block; }
+    .stars {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    header.hero { padding: 8vh 7vw 2vh; text-align: center; }
+    .logo {
+      width: 84px; height: 84px;
+      border-radius: 22px;
+      display: block;
+      margin: 0 auto 18px;
+      animation: hop 1.6s ease-in-out infinite;
+      box-shadow: 0 16px 40px rgba(61,220,132,.25);
+    }
+    @keyframes hop {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .eyebrow {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--green);
+      animation: rise .8s ease both;
+    }
+    h1 {
+      font-weight: 500;
+      font-size: clamp(52px, 8vw, 96px);
+      line-height: .92;
+      letter-spacing: -.045em;
+      margin: 12px 0 18px;
+      background: linear-gradient(100deg, #fff 20%, #b7ffd4 45%, #fff 70%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: rise .9s .05s ease both, sheen 7s linear infinite;
+    }
+    .lede {
+      max-width: 38rem; margin: 0 auto 28px; color: var(--muted); font-size: 21px;
+      animation: rise .9s .12s ease both;
+    }
+    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; animation: rise .9s .18s ease both; }
+    .actions a {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      text-decoration: none; border-radius: 999px; padding: 12px 18px; font-size: 15px;
+    }
+    .actions .go { background: var(--ink); color: #111; }
+    .actions .quiet { border: 1px solid var(--line); background: rgba(255,255,255,.03); }
+    .stage { padding: 6vh 6vw 2vh; }
+    .frame {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 22px;
+      border-radius: 28px;
+      position: relative;
+      background:
+        linear-gradient(#0c0e0d, #0c0e0d) padding-box,
+        conic-gradient(from var(--angle), #3ddc84, #6aa7ff, #f0a35e, #3ddc84) border-box;
+      border: 1px solid transparent;
+      box-shadow: 0 40px 120px rgba(0,0,0,.45), 0 0 80px rgba(61,220,132,.08);
+      animation: spin 10s linear infinite;
+    }
+    .frame img {
+      width: 100%;
+      display: block;
+      border-radius: 16px;
+      animation: none;
+    }
+    .mac { max-width: 1040px; margin: 36px auto 0; }
+    .mac img {
+      width: 100%;
+      display: block;
+      border-radius: 22px;
+      box-shadow: 0 30px 90px rgba(0,0,0,.4);
+    }
+    .mac figcaption {
+      margin-top: 12px;
+      text-align: center;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+    }
+    .frame::after {
+      content: "";
+      position: absolute; inset: 22px; border-radius: 16px;
+      background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.22), transparent 58%);
+      background-size: 220% 100%;
+      mix-blend-mode: screen;
+      animation: sweep 4.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    section.block { padding: 8vh 7vw; max-width: 1000px; margin: 0 auto; }
+    h2 { font-size: clamp(34px, 5vw, 56px); letter-spacing: -.03em; font-weight: 500; margin: 0 0 8px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+    .card {
+      background: rgba(17,20,18,.8);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      font-family: -apple-system, sans-serif;
+      font-size: 15px;
+      color: var(--muted);
+      transition: transform .35s ease, border-color .35s ease, box-shadow .35s ease;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(61,220,132,.45);
+      box-shadow: 0 16px 40px rgba(61,220,132,.08);
+    }
+    .card strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
+    .cmd {
+      position: relative;
+    }
+    .cmd pre {
+      background: rgba(8,10,9,.85);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 88px 16px 18px;
+      overflow: auto;
+      font-size: 14px;
+      margin: 0;
+    }
+    .copy {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+      background: rgba(255,255,255,.08);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .copy.done { color: var(--green); border-color: rgba(61,220,132,.5); }
+    .psst {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .psst a { color: var(--green); }
+    footer {
+      padding: 48px 7vw 64px;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    footer a {
+      text-decoration: none;
+      font-size: 15px;
+      letter-spacing: .01em;
+      background: linear-gradient(100deg, #f3f6f3 0%, #3ddc84 40%, #fff 60%, #f3f6f3 100%);
+      background-size: 220% auto;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: sheen 5s linear infinite;
+    }
+    footer a:hover { letter-spacing: .08em; }
+    @keyframes drift { to { transform: translate3d(4%, -3%, 0) scale(1.08); } }
+    @keyframes sheen { to { background-position: 200% center; } }
+    @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+    @keyframes spin { to { --angle: 360deg; } }
+    @keyframes sweep { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+    @property --angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="spot" aria-hidden="true"></div>
+
+  <nav class="nav">
+    <a class="brand" href="#"><img src="icon.png" alt=""><span>TokenBar</span></a>
+    <a class="btn" href="https://github.com/jashjacob/TokenBar">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+      <span class="stars" id="stars">★ 4</span>
+    </a>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">MacBook Touch Bar</div>
+    <h1>See the quota<br>before it runs out.</h1>
+    <p class="lede">Claude, Codex, Cursor, Grok, OpenCode, and Command Code, counting down on the Touch Bar. You see what’s left before the limit hits.</p>
+    <div class="actions">
+      <a class="go" href="https://github.com/jashjacob/TokenBar">View the code</a>
+      <a class="quiet" href="#install">Install on this Mac</a>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="frame">
+      <img src="strip-packed.jpg" alt="TokenBar on a real MacBook Touch Bar">
+    </div>
+    <figure class="mac">
+      <img src="macbook.jpg" alt="TokenBar running on a MacBook Pro">
+      <figcaption>On a MacBook Pro with a Touch Bar.</figcaption>
+    </figure>
+  </div>
+
+  <section class="block">
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card"><strong>Countdowns</strong>5-hour windows sit larger. Longer windows shrink when the bar fills up.</div>
+      <div class="card"><strong>Your own logins</strong>If TokenTracker comes back stale or empty, Command Code, OpenCode, Grok, and Cursor can be read directly.</div>
+      <div class="card"><strong>One script</strong>Clone the repo and run install.sh. No Xcode app. No paid Apple account.</div>
+    </div>
+  </section>
+
+  <section class="block" id="install">
+    <h2>Install via command line</h2>
+    <div class="cmd">
+      <button class="copy" type="button" id="copy">Copy</button>
+      <pre><code id="install-cmd">git clone https://github.com/jashjacob/TokenBar.git
+cd TokenBar
+./scripts/install.sh</code></pre>
+    </div>
+    <p class="psst">psst, make sure you have <a href="https://github.com/xiufengsun/TokenTracker">TokenTracker</a> installed.</p>
+  </section>
+
+  <footer>
+    <a href="https://jashjacob.com">Built by Jash Jacob</a>
+  </footer>
+  <script>
+    const spot = document.querySelector(".spot");
+    addEventListener("pointermove", (e) => {
+      spot.style.setProperty("--x", e.clientX + "px");
+      spot.style.setProperty("--y", e.clientY + "px");
+    });
+    document.getElementById("copy").addEventListener("click", async () => {
+      const button = document.getElementById("copy");
+      const text = document.getElementById("install-cmd").innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      button.textContent = "Copied";
+      button.classList.add("done");
+      setTimeout(() => {
+        button.textContent = "Copy";
+        button.classList.remove("done");
+      }, 1600);
+    });
+    fetch("https://api.github.com/repos/jashjacob/TokenBar")
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.stargazers_count === "number") {
+          document.getElementById("stars").textContent = "★ " + d.stargazers_count;
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
