@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TokenBar — live AI quota on the MacBook Touch Bar</title>
-  <meta name="description" content="TokenBar shows Claude, Codex, Cursor, Grok, OpenCode, and Command Code countdowns on a MacBook Touch Bar. It reads TokenTracker on your Mac. No Xcode app required.">
+  <meta name="description" content="Claude, Codex, Cursor, Grok, OpenCode, and Command Code, counting down on the MacBook Touch Bar.">
   <meta property="og:title" content="TokenBar — live AI quota on the Touch Bar">
   <meta property="og:description" content="Countdowns, 5h and 7d tags, and today’s tokens. A small menu-bar app for MacBooks that still have a Touch Bar.">
   <meta property="og:type" content="website">
@@ -143,7 +143,17 @@
       max-width: 38rem; margin: 0 auto 28px; color: var(--muted); font-size: 21px;
       animation: rise .9s .12s ease both;
     }
-    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; animation: rise .9s .18s ease both; }
+    .free {
+      margin: -8px auto 22px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      animation: rise .9s .16s ease both;
+    }
+    .free b { color: var(--green); font-weight: 600; }
+    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; animation: rise .9s .22s ease both; }
     .actions a {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       text-decoration: none; border-radius: 999px; padding: 12px 18px; font-size: 15px;
@@ -195,6 +205,50 @@
     }
     section.block { padding: 8vh 7vw; max-width: 1000px; margin: 0 auto; }
     h2 { font-size: clamp(34px, 5vw, 56px); letter-spacing: -.03em; font-weight: 500; margin: 0 0 8px; }
+    .sim {
+      margin: 28px auto 8px;
+      max-width: 980px;
+      height: auto;
+      border-radius: 16px;
+      background: #050505;
+      border: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 12px 20px;
+      overflow: hidden;
+    }
+    .live {
+      height: 40px;
+      min-width: 132px;
+      border-radius: 8px;
+      background: #101010;
+      padding: 4px 8px 5px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      flex: 1;
+    }
+    .live .row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; }
+    .live .name { color: #fff; }
+    .live .pill {
+      margin-left: 4px;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .live .time { color: rgba(255,255,255,.92); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .live .barline { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+    .live .track { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.16); position: relative; }
+    .live .fill { height: 4px; border-radius: 2px; width: 0; }
+    .live .pct { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 28px; text-align: right; }
+    .live .tick {
+      position: absolute; top: -2px; width: 1.5px; height: 8px; border-radius: 1px;
+    }
+    .sim-note { text-align: center; color: var(--muted); font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 15px; margin-top: 14px; letter-spacing: -.01em; }
+    .sim-note .g { color: rgb(56, 214, 128); }
+    .sim-note .a { color: rgb(255, 158, 46); }
+    .sim-note .r { color: rgb(255, 84, 84); }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
     .card {
       background: rgba(17,20,18,.8);
@@ -289,6 +343,7 @@
     <div class="eyebrow">MacBook Touch Bar</div>
     <h1>See the quota<br>before it runs out.</h1>
     <p class="lede">Claude, Codex, Cursor, Grok, OpenCode, and Command Code, counting down on the Touch Bar. You see what’s left before the limit hits.</p>
+    <p class="free"><b>Free</b> open-source utility</p>
     <div class="actions">
       <a class="go" href="https://github.com/jashjacob/TokenBar">View the code</a>
       <a class="quiet" href="#install">Install on this Mac</a>
@@ -307,10 +362,12 @@
 
   <section class="block">
     <h2>What it does</h2>
+    <div class="sim" id="sim" aria-label="Chips filling from empty to full"></div>
+    <p class="sim-note"><span class="g">Green</span>, then <span class="a">amber</span>, then <span class="r">red</span>. You feel it before you hit the wall.</p>
     <div class="grid">
-      <div class="card"><strong>Countdowns</strong>5-hour windows sit larger. Longer windows shrink when the bar fills up.</div>
-      <div class="card"><strong>Your own logins</strong>If TokenTracker comes back stale or empty, Command Code, OpenCode, Grok, and Cursor can be read directly.</div>
-      <div class="card"><strong>One script</strong>Clone the repo and run install.sh. No Xcode app. No paid Apple account.</div>
+      <div class="card"><strong>The short ones stay big</strong>A 5-hour window keeps its place. Week and month step aside when the bar fills up.</div>
+      <div class="card"><strong>It doesn’t go blank</strong>Command Code, OpenCode, Grok, and Cursor can answer on their own when the feed goes quiet.</div>
+      <div class="card"><strong>On the bar in a minute</strong>Three lines in Terminal. TokenBar shows up on the Touch Bar.</div>
     </div>
   </section>
 
@@ -329,6 +386,51 @@ cd TokenBar
     <a href="https://jashjacob.com">Built by Jash Jacob</a>
   </footer>
   <script>
+    const chips = [
+      { name: "Claude", tag: "5h", speed: 14000, start: Math.random() * 55, pace: 0.22 + Math.random() * 0.2 },
+      { name: "Codex", tag: "5h", speed: 9000, start: Math.random() * 40, pace: 0.55 + Math.random() * 0.2 },
+      { name: "Cursor", tag: "30d", speed: 42000, start: 20 + Math.random() * 25, pace: 0.35 + Math.random() * 0.15 },
+      { name: "Grok", tag: "7d", speed: 20000, start: Math.random() * 50, pace: 0.7 + Math.random() * 0.2 },
+      { name: "OpenCode", tag: "5h", speed: 7000, start: Math.random() * 30, pace: 0.12 + Math.random() * 0.18 }
+    ];
+    const sim = document.getElementById("sim");
+    chips.forEach((chip) => {
+      const el = document.createElement("div");
+      el.className = "live";
+      el.innerHTML = `<div class="row"><span class="name">${chip.name}${chip.tag ? `<span class="pill">${chip.tag}</span>` : ""}</span><span class="time"></span></div><div class="barline"><div class="track"><div class="fill"></div><div class="tick" hidden></div></div><span class="pct"></span></div>`;
+      sim.appendChild(el);
+      chip.el = el;
+    });
+    function tint(percent) {
+      if (percent >= 85) return "rgb(255, 84, 84)";
+      if (percent >= 60) return "rgb(255, 158, 46)";
+      return "rgb(56, 214, 128)";
+    }
+    const started = performance.now();
+    function frame(now) {
+      chips.forEach((chip) => {
+        const t = ((now - started) / chip.speed + chip.start / 100) % 1;
+        const percent = t * 100;
+        const color = tint(percent);
+        const pill = chip.el.querySelector(".pill");
+        const fill = chip.el.querySelector(".fill");
+        const pct = chip.el.querySelector(".pct");
+        const tick = chip.el.querySelector(".tick");
+        if (pill) {
+          pill.style.color = color;
+          pill.style.background = color.replace("rgb", "rgba").replace(")", ", 0.22)");
+        }
+        fill.style.width = percent + "%";
+        fill.style.background = color;
+        pct.textContent = Math.round(percent) + "%";
+        pct.style.color = color;
+        tick.hidden = percent < 5;
+        tick.style.background = color;
+        tick.style.left = (chip.pace * 100) + "%";
+      });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
     const spot = document.querySelector(".spot");
     addEventListener("pointermove", (e) => {
       spot.style.setProperty("--x", e.clientX + "px");
