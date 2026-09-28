@@ -297,13 +297,31 @@
       cursor: pointer;
     }
     .copy.done { color: var(--green); border-color: rgba(61,220,132,.5); }
-    .psst {
+    .need {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 14px;
-      color: var(--muted);
-      font-style: italic;
+      font-size: 16px;
+      color: var(--ink);
+      margin: 8px 0 16px;
     }
-    .psst a { color: var(--green); }
+    .need a { color: var(--green); }
+    .faq { margin-top: 8px; }
+    .faq details {
+      border-bottom: 1px solid var(--line);
+      padding: 14px 0;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .faq summary {
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--ink);
+    }
+    .faq p { color: var(--muted); margin: 10px 0 0; }
+    table { width: 100%; border-collapse: collapse; font-family: -apple-system, sans-serif; font-size: 15px; }
+    th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 500; }
+    .agents { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--muted); }
+    .agents ol { padding-left: 1.2rem; }
+    .agents code { color: var(--ink); }
     footer {
       padding: 48px 7vw 64px;
       text-align: center;
@@ -378,13 +396,63 @@
 
   <section class="block" id="install">
     <h2>Install via command line</h2>
+    <p class="need">A Mac with a Touch Bar. macOS 13 or later. <a href="https://github.com/xiufengsun/TokenTracker">TokenTracker</a> running.</p>
     <div class="cmd">
       <button class="copy" type="button" id="copy">Copy</button>
       <pre><code id="install-cmd">git clone https://github.com/jashjacob/TokenBar.git
 cd TokenBar
 ./scripts/install.sh</code></pre>
     </div>
-    <p class="psst">psst, make sure you have <a href="https://github.com/xiufengsun/TokenTracker">TokenTracker</a> installed.</p>
+  </section>
+
+  <section class="block">
+    <h2>Questions</h2>
+    <div class="faq">
+      <details>
+        <summary>Which tools?</summary>
+        <p>Claude, Codex, Cursor, Grok, OpenCode, and Command Code. Cursor can also show Grok Bot on its own, even when the Cursor plan is empty.</p>
+      </details>
+      <details>
+        <summary>What if TokenTracker is empty?</summary>
+        <p>Command Code, OpenCode, Grok, and Cursor can still show, from the login already on your Mac. Claude, ChatGPT / Codex, and Antigravity still need TokenTracker to send a window.</p>
+      </details>
+      <details>
+        <summary>How do I update?</summary>
+        <p>From the TokenBar folder: <code>git pull</code>, then <code>./scripts/install.sh</code>.</p>
+      </details>
+      <details>
+        <summary>How do I uninstall?</summary>
+        <p>Quit TokenBar. If Launch at Login is on, turn it off in the menu first. Then drag TokenBar out of Applications.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Fallbacks</h2>
+    <p>TokenTracker sometimes comes back stale or empty. A fallback then asks that tool itself, and owns every window for it.</p>
+    <table>
+      <tr><th>Tool</th><th>Fallback</th></tr>
+      <tr><td>Command Code</td><td>In</td></tr>
+      <tr><td>OpenCode</td><td>In</td></tr>
+      <tr><td>Grok</td><td>In</td></tr>
+      <tr><td>Cursor</td><td>In</td></tr>
+      <tr><td>Claude</td><td>Not yet</td></tr>
+      <tr><td>ChatGPT / Codex</td><td>Not yet</td></tr>
+      <tr><td>Antigravity</td><td>Not yet</td></tr>
+    </table>
+  </section>
+
+  <section class="block">
+    <h2>For coding agents</h2>
+    <div class="agents">
+      <p>Don’t download the disk image. Don’t clone TokenTracker unless asked.</p>
+      <ol>
+        <li>Touch Bar Mac, macOS 13 or later.</li>
+        <li>TokenTracker must return 200 from <code>http://127.0.0.1:7680/functions/tokentracker-usage-limits</code> before you install TokenBar.</li>
+        <li><code>./scripts/install.sh</code></li>
+        <li>Check <code>pgrep -x TokenBar</code> and <code>~/Library/Logs/TokenBar.log</code>.</li>
+      </ol>
+    </div>
   </section>
 
   <footer>
