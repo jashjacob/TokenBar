@@ -12,7 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DOCS = os.path.join(ROOT, "docs")
 SHOT = os.path.join(DOCS, "touchbar-source.jpg")
 ICON_CANDIDATES = [
-    os.path.join(ROOT, "dist/TokenBar.app/Contents/Resources/AppIcon.icns"),
+    os.path.join(ROOT, "dist.noindex/TokenBar.app/Contents/Resources/AppIcon.icns"),
     "/Applications/TokenBar.app/Contents/Resources/AppIcon.icns",
 ]
 

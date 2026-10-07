@@ -1,5 +1,6 @@
 .build/
 dist/
+dist.noindex/
 .swiftpm/
 *.xcodeproj
 .DS_Store

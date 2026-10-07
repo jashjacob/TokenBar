@@ -5,10 +5,10 @@ set -euo pipefail
 # Run after ./scripts/package-app.sh
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/dist/TokenBar.app"
+APP="$ROOT/dist.noindex/TokenBar.app"
 INFO="$ROOT/Sources/TokenBar/AppInfo.swift"
-STAGE="$ROOT/dist/dmg"
-TMP="$ROOT/dist/TokenBar.rw.dmg"
+STAGE="$ROOT/dist.noindex/dmg"
+TMP="$ROOT/dist.noindex/TokenBar.rw.dmg"
 
 plist_value() {
   sed -n "s/.*static let $1 = \"\\(.*\\)\".*/\\1/p" "$INFO" | head -1
@@ -26,7 +26,7 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
-DMG="$ROOT/dist/TokenBar-${VERSION}.dmg"
+DMG="$ROOT/dist.noindex/TokenBar-${VERSION}.dmg"
 VOL="TokenBar ${VERSION}"
 
 rm -rf "$STAGE" "$TMP" "$DMG"

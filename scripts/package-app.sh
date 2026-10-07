@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/.build/release/TokenBar"
-DIST="$ROOT/dist/TokenBar.app"
+# .noindex keeps this build out of Spotlight, so it does not sit next to /Applications/TokenBar.app.
+DIST="$ROOT/dist.noindex/TokenBar.app"
 ID="com.jashjacob.TokenBar"
 INFO="$ROOT/Sources/TokenBar/AppInfo.swift"
 
@@ -95,5 +96,6 @@ iconutil -c icns -o "$DIST/Contents/Resources/AppIcon.icns" "$ICONSET"
 rm -rf "$ICONSET"
 
 /usr/bin/codesign --force --sign - --identifier "$ID" "$DIST" >/dev/null
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$DIST" >/dev/null || true
 
 echo "built $DIST  $VERSION ($BUILD)"

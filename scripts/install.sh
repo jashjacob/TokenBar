@@ -22,7 +22,7 @@ if pgrep -x TokenBar >/dev/null; then
 fi
 
 rm -rf /Applications/TokenBar.app
-ditto "$ROOT/dist/TokenBar.app" /Applications/TokenBar.app
+ditto "$ROOT/dist.noindex/TokenBar.app" /Applications/TokenBar.app
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/TokenBar.app >/dev/null
 open /Applications/TokenBar.app
 
