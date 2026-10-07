@@ -14,6 +14,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var reassertWork: DispatchWorkItem?
     private var snapshots: [String: ChipSnapshot] = [:]
     private var lastCelebratedAt: [String: Date] = [:]
+    /// Reset time we already flashed for. A slide under two minutes is the same window.
+    private var paceFlashedReset: [String: Date] = [:]
     var onCollapsed: (() -> Void)?
 
     var isPinned: Bool {
@@ -73,6 +75,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
         let resetIDs = offline ? [] : detectResets(in: visible)
+        let paceIDs = offline ? [] : detectPaceFlashes(in: visible).filter { !resetIDs.contains($0) }
         self.chips = visible
         self.today = today
         self.offline = offline
@@ -86,6 +89,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             if isPinned { presentExpanded() }
             DispatchQueue.main.async { [weak self] in
                 self?.celebrate(resetIDs)
+            }
+        }
+        if !paceIDs.isEmpty {
+            if isPinned { presentExpanded() }
+            DispatchQueue.main.async { [weak self] in
+                self?.flashPace(paceIDs)
             }
         }
     }
@@ -223,5 +232,31 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         stripBot?.playReset()
+    }
+
+    /// One amber flash per reset time when a visible chip is running ahead of an even burn.
+    private func detectPaceFlashes(in chips: [Chip]) -> [String] {
+        var fired: [String] = []
+        for chip in chips {
+            guard chip.paceRunoutText != nil, let reset = chip.resetAt else { continue }
+            if let old = paceFlashedReset[chip.id], abs(reset.timeIntervalSince(old)) < 120 {
+                continue
+            }
+            paceFlashedReset[chip.id] = reset
+            fired.append(chip.id)
+        }
+        return fired
+    }
+
+    private func flashPace(_ ids: [String]) {
+        var labels: [String: String] = [:]
+        for id in ids {
+            guard let chip = chips.first(where: { $0.id == id }), let text = chip.paceRunoutText else { continue }
+            labels[id] = text
+            Log.line("pace flash: \(chip.label) \(text)")
+        }
+        guard !labels.isEmpty else { return }
+        stripView?.playPace(labels)
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
     }
 }

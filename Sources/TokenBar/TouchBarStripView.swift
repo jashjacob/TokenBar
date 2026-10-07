@@ -61,6 +61,12 @@ final class TouchBarStripView: NSView {
         }
     }
 
+    func playPace(_ labels: [String: String]) {
+        for (id, label) in labels {
+            chipViews[id]?.playPace(label: label)
+        }
+    }
+
     override func layout() {
         super.layout()
         let spacing = ChipLayout.spacing
