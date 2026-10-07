@@ -91,6 +91,7 @@ final class StatusItemController: NSObject {
                 row.target = self
                 row.representedObject = chip.id
                 row.state = ChipPreferences.isVisible(chip.id) ? .on : .off
+                row.toolTip = chip.rowTip
                 menu.addItem(row)
             }
             let showAll = NSMenuItem(title: "Show All", action: #selector(showAllClicked), keyEquivalent: "")

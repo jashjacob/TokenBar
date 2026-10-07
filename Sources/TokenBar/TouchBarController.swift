@@ -6,6 +6,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var bar: NSTouchBar?
     private var chips: [Chip] = []
     private var today: TodayUsage?
+    private var offline = false
     private var stripBot: StripBotView?
     private var stripView: TouchBarStripView?
     private var installedStrip = false
@@ -69,17 +70,17 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
 
     func update(chips: [Chip], today: TodayUsage?, offline: Bool) {
         let visible = ChipLayout.ordered(chips).filter { ChipPreferences.isVisible($0.id) }
-        let next = offline ? [Chip(id: "offline", label: "TT off", percent: 100, resetAt: nil, windowSeconds: nil)] : visible
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
-        let resetIDs = offline ? [] : detectResets(in: next)
-        self.chips = next
+        let resetIDs = offline ? [] : detectResets(in: visible)
+        self.chips = visible
         self.today = today
+        self.offline = offline
         if bar == nil { rebuildBar() }
         if stripView == nil, isPinned || presented {
             presentExpanded()
         }
-        stripView?.apply(chips: next, today: today, showTokens: showTokens, showCost: showCost)
+        stripView?.apply(chips: visible, today: today, showTokens: showTokens, showCost: showCost, dimmed: offline)
         refreshStripTitle(offline: offline)
         if !resetIDs.isEmpty {
             if isPinned { presentExpanded() }
@@ -91,7 +92,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
 
     func tick() {
         stripView?.tick(chips: chips, today: today)
-        refreshStripTitle(offline: chips.first?.id == "offline")
+        refreshStripTitle(offline: offline)
     }
 
     private func installStrip() {
@@ -126,9 +127,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let view = TouchBarStripView(frame: NSRect(x: 0, y: 0, width: 680, height: 30))
         view.onChipTap = { [weak self] in self?.chipClicked() }
         view.onTodayTap = { [weak self] in self?.todayClicked() }
-        let showTokens = today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
-        let showCost = today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
-        view.apply(chips: chips, today: today, showTokens: showTokens, showCost: showCost)
+        let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
+        let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
+        view.apply(chips: chips, today: today, showTokens: showTokens, showCost: showCost, dimmed: offline)
         item.view = view
         item.visibilityPriority = .high
         stripView = view

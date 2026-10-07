@@ -38,6 +38,8 @@ struct Chip: Equatable, Identifiable {
     let resetAt: Date?
     let windowSeconds: Double?
     var source: ChipSource = .tokenTracker
+    /// When the fallback answer was fetched. TokenTracker chips leave this empty.
+    var fetchedAt: Date? = nil
 
     var remaining: TimeInterval? {
         resetAt.map { $0.timeIntervalSinceNow }
@@ -97,6 +99,20 @@ struct Chip: Equatable, Identifiable {
     var tooltipTitle: String {
         guard remaining != nil else { return menuTitle }
         return "\(menuTitle)  \(countdownText)"
+    }
+
+    /// Menu-row hover. Fallback chips add how long ago that answer was fetched.
+    var rowTip: String {
+        guard source == .fallback, let fetchedAt else { return tooltipTitle }
+        let age = Countdown.format(max(0, Date().timeIntervalSince(fetchedAt)))
+        return "\(tooltipTitle) · Fallback · \(age)"
+    }
+
+    /// Sources pill under Fallback. The heading already says where it came from.
+    var fallbackPill: String {
+        guard let fetchedAt else { return label }
+        let age = Countdown.format(max(0, Date().timeIntervalSince(fetchedAt)))
+        return "\(label) · \(age)"
     }
 }
 

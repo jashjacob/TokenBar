@@ -31,7 +31,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func update(chips: [Chip], today: TodayUsage?, offline: Bool, error: String?) {
         var tracker = ChipSources.names(chips.filter { $0.source == .tokenTracker })
         if today != nil { tracker.insert("Today", at: 0) }
-        let fallback = ChipSources.names(chips.filter { $0.source == .fallback })
+        let fallback = chips.filter { $0.source == .fallback }.map(\.fallbackPill)
         var current = Set(chips.map(\.id))
         if today != nil { current.formUnion(ChipPreferences.todayMetricIDs) }
         let leftovers = ChipPreferences.hiddenIDs.subtracting(current).sorted()

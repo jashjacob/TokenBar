@@ -10,6 +10,7 @@ final class TouchBarStripView: NSView {
     private var today: TodayUsage?
     private var showTokens = false
     private var showCost = false
+    private var dimmed = false
     private var tokenView: TodayBarView?
     private var costView: TodayBarView?
     private var chipViews: [String: ChipBarView] = [:]
@@ -27,11 +28,12 @@ final class TouchBarStripView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func apply(chips: [Chip], today: TodayUsage?, showTokens: Bool, showCost: Bool) {
+    func apply(chips: [Chip], today: TodayUsage?, showTokens: Bool, showCost: Bool, dimmed: Bool = false) {
         self.chips = chips
         self.today = today
         self.showTokens = showTokens
         self.showCost = showCost
+        self.dimmed = dimmed
         syncToday()
         syncChips()
         needsLayout = true
@@ -135,8 +137,10 @@ final class TouchBarStripView: NSView {
         for chip in chips {
             if let view = chipViews[chip.id] {
                 view.chip = chip
+                view.alphaValue = dimmed ? 0.4 : 1
             } else {
                 let view = ChipBarView(chip: chip, layoutWidth: ChipLayout.contentWidth(for: chip))
+                view.alphaValue = dimmed ? 0.4 : 1
                 view.target = self
                 view.action = #selector(chipTapped)
                 addSubview(view)

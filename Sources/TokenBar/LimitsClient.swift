@@ -102,23 +102,31 @@ enum LimitsClient {
         guard ids.contains(where: { !have.contains($0) }) else { return chips }
         let now = Date()
         let extra: [Chip]
+        let fetchedAt: Date
         let fetched: Bool
         if !refreshFallbacksNow,
            let cached = fallbackCache[log],
            now.timeIntervalSince(cached.at) < fallbackTTL {
             extra = cached.chips
+            fetchedAt = cached.at
             fetched = false
         } else {
             extra = await loader()
+            fetchedAt = now
             fallbackCache[log] = (now, extra)
             fetched = true
         }
         guard !extra.isEmpty else { return chips }
+        let stamped = extra.map { chip in
+            var copy = chip
+            copy.fetchedAt = fetchedAt
+            return copy
+        }
         if fetched {
-            Log.line("\(log) fallback: \(extra.map(\.touchTitle).joined(separator: " | "))")
+            Log.line("\(log) fallback: \(stamped.map(\.touchTitle).joined(separator: " | "))")
         }
         let owned = Set(ids)
-        return chips.filter { !owned.contains($0.id) } + extra
+        return chips.filter { !owned.contains($0.id) } + stamped
     }
 
     static func discoverPort() -> Int {
