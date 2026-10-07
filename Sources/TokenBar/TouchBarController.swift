@@ -14,6 +14,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var reassertWork: DispatchWorkItem?
     private var snapshots: [String: ChipSnapshot] = [:]
     private var lastCelebratedAt: [String: Date] = [:]
+    /// Reset time we already flashed for. A slide under two minutes is the same window.
+    private var paceFlashedReset: [String: Date] = [:]
+    private var demoPending = false
+    private var demoRunning = false
+    private var demoID = 0
     var onCollapsed: (() -> Void)?
 
     var isPinned: Bool {
@@ -52,6 +57,21 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if isPinned {
             presentExpanded()
         }
+        let demoFlag = URL(fileURLWithPath: "/tmp/tokenbar-demo-flashes")
+        if FileManager.default.fileExists(atPath: demoFlag.path) {
+            demoPending = true
+            try? FileManager.default.removeItem(at: demoFlag)
+            Log.line("pace demo armed")
+        }
+    }
+
+    /// Scrolls two full-bar sentences, the 49-minute case and then the 1-minute case.
+    func previewFlashes() {
+        demoID += 1
+        demoRunning = false
+        demoPending = true
+        guard !chips.isEmpty else { return }
+        beginDemo()
     }
 
     func stop() {
@@ -72,7 +92,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let visible = ChipLayout.ordered(chips).filter { ChipPreferences.isVisible($0.id) }
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
-        let resetIDs = offline ? [] : detectResets(in: visible)
+        let resetIDs = offline || demoPending || demoRunning ? [] : detectResets(in: visible)
+        let paceIDs = offline || demoPending || demoRunning ? [] : detectPaceFlashes(in: visible).filter { !resetIDs.contains($0) }
         self.chips = visible
         self.today = today
         self.offline = offline
@@ -87,6 +108,15 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.celebrate(resetIDs)
             }
+        }
+        if !paceIDs.isEmpty {
+            if isPinned, stripView == nil { presentExpanded() }
+            DispatchQueue.main.async { [weak self] in
+                self?.flashPace(paceIDs)
+            }
+        }
+        if demoPending, !visible.isEmpty {
+            beginDemo()
         }
     }
 
@@ -223,5 +253,98 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         stripBot?.playReset()
+    }
+
+    /// One amber flash per reset time when a visible chip is running ahead of an even burn.
+    private func detectPaceFlashes(in chips: [Chip]) -> [String] {
+        var fired: [String] = []
+        for chip in chips {
+            guard chip.paceRunoutText != nil, let reset = chip.resetAt else { continue }
+            if let old = paceFlashedReset[chip.id], abs(reset.timeIntervalSince(old)) < 120 {
+                continue
+            }
+            paceFlashedReset[chip.id] = reset
+            fired.append(chip.id)
+        }
+        return fired
+    }
+
+    private func beginDemo() {
+        guard demoPending, !demoRunning else { return }
+        demoPending = false
+        demoRunning = true
+        demoID += 1
+        let id = demoID
+        if isPinned { presentExpanded() }
+        Log.line("pace demo starting")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.playDemo(step: 0, id: id)
+        }
+    }
+
+    private func playDemo(step: Int, id: Int) {
+        guard id == demoID else { return }
+        guard let chip = chips.first else {
+            demoRunning = false
+            return
+        }
+        let line: String
+        switch step {
+        case 0:
+            line = "\(chip.label) may run out early. At the current pace, usage may run out in 49m (82% used)."
+        case 1:
+            line = "\(chip.label) may run out early. At the current pace, usage may run out in 1m (98% used)."
+        default:
+            demoRunning = false
+            return
+        }
+        presentBanner(line) { [weak self] in
+            guard let self, id == self.demoID else { return }
+            guard step == 0 else {
+                self.demoRunning = false
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self.playDemo(step: 1, id: id)
+            }
+        }
+    }
+
+    private func flashPace(_ ids: [String]) {
+        let lines: [String] = ids.compactMap { id in
+            guard let chip = chips.first(where: { $0.id == id }), let eta = chip.paceRunoutText else { return nil }
+            let percent = Int(chip.percent.rounded())
+            return "\(chip.label) may run out early. At the current pace, usage may run out in \(eta) (\(percent)% used)."
+        }
+        presentBanners(lines)
+    }
+
+    private func presentBanners(_ lines: [String]) {
+        guard let first = lines.first else { return }
+        presentBanner(first) { [weak self] in
+            let rest = Array(lines.dropFirst())
+            guard !rest.isEmpty else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self?.presentBanners(rest)
+            }
+        }
+    }
+
+    private func presentBanner(_ text: String, attempt: Int = 0, completion: @escaping () -> Void) {
+        if isPinned { presentExpanded() }
+        if let strip = stripView {
+            Log.line("pace banner: \(text)")
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            strip.showBanner(text, completion: completion)
+            return
+        }
+        guard attempt < 20 else {
+            Log.line("pace banner missed, strip not ready")
+            completion()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.presentBanner(text, attempt: attempt + 1, completion: completion)
+        }
     }
 }

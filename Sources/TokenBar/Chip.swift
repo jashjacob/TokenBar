@@ -53,6 +53,26 @@ struct Chip: Equatable, Identifiable {
         return min(max(elapsed, 0), 1)
     }
 
+    /// Seconds until this window would hit 100% at the recent rate.
+    /// Set only when usage is at least 20% and more than 3 points ahead of an even burn.
+    var paceRunout: TimeInterval? {
+        guard let windowSeconds, windowSeconds > 0, let remaining, remaining > 0 else { return nil }
+        let used = min(max(percent, 0), 100) / 100
+        guard used >= 0.20 else { return nil }
+        let elapsed = (windowSeconds - remaining) / windowSeconds
+        guard elapsed > 0.02, elapsed.isFinite, used > elapsed + 0.03 else { return nil }
+        let rate = used / (windowSeconds * elapsed)
+        guard rate > 0 else { return nil }
+        let eta = (1 - used) / rate
+        guard eta.isFinite, eta > 0 else { return nil }
+        return eta
+    }
+
+    /// Short estimate for the pace flash, such as `44m`.
+    var paceRunoutText: String? {
+        paceRunout.map(Countdown.eta)
+    }
+
     /// "5h", "7d", "wk", "mo" when the label ends with a window tag.
     var windowTag: String? {
         for tag in ["5h", "7d", "wk", "mo"] where label.hasSuffix(tag) {
@@ -142,6 +162,17 @@ enum Countdown {
         if t < 3600 { return "\(t / 60)m" }
         if t < 86_400 { return "\(t / 3600)h" }
         return "\(t / 86_400)d"
+    }
+
+    /// One unit, matching a pace banner: `44m`, `2h`, `1d`.
+    static func eta(_ interval: TimeInterval) -> String {
+        if interval.isNaN || interval <= 0 { return "now" }
+        let t = Int(interval.rounded(.down))
+        if t < 60 { return "\(t)s" }
+        let hours = t / 3600
+        if hours > 24 { return "\(hours / 24)d" }
+        if hours > 0 { return "\(hours)h" }
+        return "\(t / 60)m"
     }
 }
 
