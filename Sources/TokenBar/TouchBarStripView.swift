@@ -61,10 +61,16 @@ final class TouchBarStripView: NSView {
         }
     }
 
-    func playPace(_ labels: [String: String]) {
+    @discardableResult
+    func playPace(_ labels: [String: String]) -> Bool {
+        var painted = false
         for (id, label) in labels {
-            chipViews[id]?.playPace(label: label)
+            guard let view = chipViews[id] else { continue }
+            view.isHidden = false
+            view.playPace(label: label)
+            painted = true
         }
+        return painted
     }
 
     override func layout() {

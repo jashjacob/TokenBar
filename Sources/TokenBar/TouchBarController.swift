@@ -92,7 +92,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             }
         }
         if !paceIDs.isEmpty {
-            if isPinned { presentExpanded() }
+            if isPinned, stripView == nil { presentExpanded() }
             DispatchQueue.main.async { [weak self] in
                 self?.flashPace(paceIDs)
             }
@@ -248,15 +248,29 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         return fired
     }
 
-    private func flashPace(_ ids: [String]) {
+    private func flashPace(_ ids: [String], attempt: Int = 0) {
         var labels: [String: String] = [:]
         for id in ids {
             guard let chip = chips.first(where: { $0.id == id }), let text = chip.paceRunoutText else { continue }
             labels[id] = text
-            Log.line("pace flash: \(chip.label) \(text)")
         }
         guard !labels.isEmpty else { return }
-        stripView?.playPace(labels)
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        if isPinned, stripView == nil { presentExpanded() }
+        if stripView?.playPace(labels) == true {
+            for (id, text) in labels {
+                let name = chips.first(where: { $0.id == id })?.label ?? id
+                Log.line("pace flash: \(name) \(text)")
+            }
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            return
+        }
+        guard attempt < 20 else {
+            for id in ids { paceFlashedReset.removeValue(forKey: id) }
+            Log.line("pace flash missed, strip not ready")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.flashPace(ids, attempt: attempt + 1)
+        }
     }
 }
