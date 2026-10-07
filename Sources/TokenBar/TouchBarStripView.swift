@@ -15,6 +15,8 @@ final class TouchBarStripView: NSView {
     private var costView: TodayBarView?
     private var chipViews: [String: ChipBarView] = [:]
     private let overflowBadge = OverflowBadge()
+    private let marquee = MarqueeBanner()
+    private var marqueeUp = false
 
     override var isFlipped: Bool { true }
     override var intrinsicContentSize: NSSize { NSSize(width: 680, height: 30) }
@@ -26,6 +28,8 @@ final class TouchBarStripView: NSView {
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         overflowBadge.isHidden = true
         addSubview(overflowBadge)
+        marquee.isHidden = true
+        addSubview(marquee)
     }
 
     @available(*, unavailable)
@@ -61,6 +65,20 @@ final class TouchBarStripView: NSView {
         }
     }
 
+    /// Covers the whole strip with one scrolling sentence, then returns to the chips.
+    func showBanner(_ text: String, completion: @escaping () -> Void) {
+        marqueeUp = true
+        addSubview(marquee)
+        marquee.show(text) { [weak self] in
+            guard let self else { return }
+            self.marqueeUp = false
+            self.marquee.isHidden = true
+            self.needsLayout = true
+            completion()
+        }
+        needsLayout = true
+    }
+
     @discardableResult
     func playPace(_ labels: [String: String]) -> Bool {
         var painted = false
@@ -75,6 +93,17 @@ final class TouchBarStripView: NSView {
 
     override func layout() {
         super.layout()
+        if marqueeUp {
+            for view in chipViews.values { view.isHidden = true }
+            tokenView?.isHidden = true
+            costView?.isHidden = true
+            overflowBadge.isHidden = true
+            marquee.isHidden = false
+            marquee.frame = bounds
+            return
+        }
+        tokenView?.isHidden = false
+        costView?.isHidden = false
         let spacing = ChipLayout.spacing
         let height = bounds.height
         var x: CGFloat = 0
@@ -235,5 +264,81 @@ private final class OverflowBadge: NSView {
     private static let textAttrs: [NSAttributedString.Key: Any] = [
         .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
         .foregroundColor: NSColor.white.withAlphaComponent(0.92),
+    ]
+}
+
+/// One sentence scrolling across the full Touch Bar, then the chips come back.
+private final class MarqueeBanner: NSView {
+    private var message = ""
+    private var onFinished: (() -> Void)?
+    private var timer: Timer?
+    private var began: Date?
+    private var runDuration: TimeInterval = 8
+
+    override var isFlipped: Bool { true }
+
+    func show(_ text: String, completion: @escaping () -> Void) {
+        message = text
+        onFinished = completion
+        began = nil
+        isHidden = false
+        timer?.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            guard self.bounds.width > 1 else { return }
+            if self.began == nil {
+                self.began = Date()
+                let distance = self.bounds.width + self.textWidth
+                let seconds = min(11, max(6, distance / 85))
+                self.runDuration = seconds
+            }
+            if Date().timeIntervalSince(self.began ?? Date()) >= self.runDuration {
+                timer.invalidate()
+                self.timer = nil
+                let done = self.onFinished
+                self.onFinished = nil
+                done?()
+                return
+            }
+            self.needsDisplay = true
+        }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(srgbRed: 0.16, green: 0.09, blue: 0.02, alpha: 1).setFill()
+        bounds.fill()
+        NSColor(srgbRed: 1.0, green: 0.62, blue: 0.18, alpha: 1).setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: 2).fill()
+
+        guard began != nil else { return }
+        let elapsed = Date().timeIntervalSince(began ?? Date())
+        let progress = min(1, elapsed / runDuration)
+        let width = textWidth
+        let travel = bounds.width + width
+        let x = bounds.width - travel * CGFloat(progress)
+        let text = message as NSString
+        let size = text.size(withAttributes: Self.attrs)
+        let rect = NSRect(
+            x: x,
+            y: (bounds.height - size.height) / 2,
+            width: ceil(size.width),
+            height: ceil(size.height)
+        )
+        text.draw(in: rect, withAttributes: Self.attrs)
+    }
+
+    private var textWidth: CGFloat {
+        ceil((message as NSString).size(withAttributes: Self.attrs).width)
+    }
+
+    private static let attrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+        .foregroundColor: NSColor(srgbRed: 1.0, green: 0.86, blue: 0.55, alpha: 1),
     ]
 }

@@ -148,7 +148,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         pin.state = touchBar.isPinned ? .on : .off
         menu.addItem(pin)
 
-        let preview = NSMenuItem(title: "Preview Flashes", action: #selector(previewClicked), keyEquivalent: "")
+        let preview = NSMenuItem(title: "Preview Banner", action: #selector(previewClicked), keyEquivalent: "")
         preview.target = self
         menu.addItem(preview)
 

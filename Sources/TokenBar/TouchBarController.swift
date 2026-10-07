@@ -65,7 +65,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
     }
 
-    /// Plays the three chip states in order on the leftmost card: amber `49m`, amber `1m`, green `RESET`.
+    /// Scrolls two full-bar sentences, the 49-minute case and then the 1-minute case.
     func previewFlashes() {
         demoID += 1
         demoRunning = false
@@ -276,7 +276,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         demoID += 1
         let id = demoID
         if isPinned { presentExpanded() }
-        Log.line("pace demo starting on \(chips.first?.label ?? "chip")")
+        Log.line("pace demo starting")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.playDemo(step: 0, id: id)
         }
@@ -288,51 +288,63 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             demoRunning = false
             return
         }
+        let line: String
         switch step {
         case 0:
-            paintPace([chip.id: "49m"])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-                self?.playDemo(step: 1, id: id)
-            }
+            line = "\(chip.label) may run out early. At the current pace, usage may run out in 49m (82% used)."
         case 1:
-            paintPace([chip.id: "1m"])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-                self?.playDemo(step: 2, id: id)
-            }
+            line = "\(chip.label) may run out early. At the current pace, usage may run out in 1m (98% used)."
         default:
-            celebrate([chip.id])
-            Log.line("demo reset on \(chip.label)")
             demoRunning = false
+            return
         }
-    }
-
-    private func flashPace(_ ids: [String], attempt: Int = 0) {
-        var labels: [String: String] = [:]
-        for id in ids {
-            guard let chip = chips.first(where: { $0.id == id }), let text = chip.paceRunoutText else { continue }
-            labels[id] = text
-        }
-        guard !labels.isEmpty else { return }
-        paintPace(labels, attempt: attempt, ids: ids)
-    }
-
-    private func paintPace(_ labels: [String: String], attempt: Int = 0, ids: [String]? = nil) {
-        if isPinned, stripView == nil { presentExpanded() }
-        if stripView?.playPace(labels) == true {
-            for (id, text) in labels {
-                let name = chips.first(where: { $0.id == id })?.label ?? id
-                Log.line("pace flash: \(name) \(text)")
+        presentBanner(line) { [weak self] in
+            guard let self, id == self.demoID else { return }
+            guard step == 0 else {
+                self.demoRunning = false
+                return
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self.playDemo(step: 1, id: id)
+            }
+        }
+    }
+
+    private func flashPace(_ ids: [String]) {
+        let lines: [String] = ids.compactMap { id in
+            guard let chip = chips.first(where: { $0.id == id }), let eta = chip.paceRunoutText else { return nil }
+            let percent = Int(chip.percent.rounded())
+            return "\(chip.label) may run out early. At the current pace, usage may run out in \(eta) (\(percent)% used)."
+        }
+        presentBanners(lines)
+    }
+
+    private func presentBanners(_ lines: [String]) {
+        guard let first = lines.first else { return }
+        presentBanner(first) { [weak self] in
+            let rest = Array(lines.dropFirst())
+            guard !rest.isEmpty else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self?.presentBanners(rest)
+            }
+        }
+    }
+
+    private func presentBanner(_ text: String, attempt: Int = 0, completion: @escaping () -> Void) {
+        if isPinned { presentExpanded() }
+        if let strip = stripView {
+            Log.line("pace banner: \(text)")
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            strip.showBanner(text, completion: completion)
             return
         }
         guard attempt < 20 else {
-            for id in ids ?? Array(labels.keys) { paceFlashedReset.removeValue(forKey: id) }
-            Log.line("pace flash missed, strip not ready")
+            Log.line("pace banner missed, strip not ready")
+            completion()
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.paintPace(labels, attempt: attempt + 1, ids: ids)
+            self?.presentBanner(text, attempt: attempt + 1, completion: completion)
         }
     }
 }
