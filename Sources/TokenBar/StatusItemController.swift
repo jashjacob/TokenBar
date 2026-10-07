@@ -1,5 +1,4 @@
 import AppKit
-import ServiceManagement
 
 @MainActor
 final class StatusItemController: NSObject {
@@ -22,6 +21,11 @@ final class StatusItemController: NSObject {
         self.onRefresh = onRefresh
         self.onVisibilityChange = onVisibilityChange
         super.init()
+        SettingsWindow.shared.configure(
+            touchBar: touchBar,
+            onRefresh: onRefresh,
+            onVisibilityChange: onVisibilityChange
+        )
         applyIcon(offline: false)
     }
 
@@ -41,7 +45,7 @@ final class StatusItemController: NSObject {
                     lines.append(today.costMenuTitle)
                 }
             }
-            lines.append(contentsOf: chips.filter { ChipPreferences.isVisible($0.id) }.map(\.menuTitle))
+            lines.append(contentsOf: chips.filter { ChipPreferences.isVisible($0.id) }.map(\.tooltipTitle))
             button.toolTip = error ?? (lines.isEmpty ? "TokenBar" : lines.joined(separator: "\n"))
         }
         reloadMenu()
@@ -49,6 +53,7 @@ final class StatusItemController: NSObject {
 
     func reloadMenu() {
         item.menu = buildMenu(chips: chips, today: today, offline: offline, error: lastError)
+        SettingsWindow.shared.update(chips: chips, today: today, offline: offline, error: lastError)
     }
 
     private func applyIcon(offline: Bool) {
@@ -94,12 +99,13 @@ final class StatusItemController: NSObject {
             let hideAll = NSMenuItem(title: "Hide All", action: #selector(hideAllClicked), keyEquivalent: "")
             hideAll.target = self
             menu.addItem(hideAll)
-            let fallbacks = NSMenuItem(title: "Use fallbacks", action: #selector(toggleFallbacks), keyEquivalent: "")
-            fallbacks.target = self
-            fallbacks.state = ChipPreferences.fallbacksEnabled ? .on : .off
-            menu.addItem(fallbacks)
         }
         menu.addItem(.separator())
+
+        let pin = NSMenuItem(title: "Pin Touch Bar", action: #selector(togglePin), keyEquivalent: "")
+        pin.target = self
+        pin.state = touchBar.isPinned ? .on : .off
+        menu.addItem(pin)
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(refreshClicked), keyEquivalent: "r")
         refresh.target = self
@@ -109,25 +115,10 @@ final class StatusItemController: NSObject {
         dash.target = self
         menu.addItem(dash)
 
-        let pin = NSMenuItem(title: "Pin Touch Bar", action: #selector(togglePin), keyEquivalent: "")
-        pin.target = self
-        pin.state = touchBar.isPinned ? .on : .off
-        menu.addItem(pin)
-
-        let bounce = NSMenuItem(title: "Bounce Icon", action: #selector(toggleBounce), keyEquivalent: "")
-        bounce.target = self
-        bounce.state = touchBar.bounceStripBot ? .on : .off
-        menu.addItem(bounce)
-
-        let login = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
-        login.target = self
-        login.state = launchesAtLogin ? .on : .off
-        menu.addItem(login)
-
         menu.addItem(.separator())
-        let about = NSMenuItem(title: "About TokenBar", action: #selector(aboutClicked), keyEquivalent: "")
-        about.target = self
-        menu.addItem(about)
+        let settings = NSMenuItem(title: "Settings…", action: #selector(settingsClicked), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit TokenBar", action: #selector(quitClicked), keyEquivalent: "q")
         quit.target = self
@@ -139,10 +130,6 @@ final class StatusItemController: NSObject {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
-    }
-
-    private var launchesAtLogin: Bool {
-        SMAppService.mainApp.status == .enabled
     }
 
     private func allIDs() -> [String] {
@@ -170,14 +157,6 @@ final class StatusItemController: NSObject {
         onRefresh()
     }
 
-    @objc private func toggleFallbacks() {
-        ChipPreferences.fallbacksEnabled.toggle()
-        if ChipPreferences.fallbacksEnabled {
-            LimitsClient.refreshFallbacksNow = true
-        }
-        onRefresh()
-    }
-
     @objc private func openDashboard() {
         NSWorkspace.shared.open(LimitsClient.dashboardURL())
     }
@@ -187,29 +166,8 @@ final class StatusItemController: NSObject {
         onRefresh()
     }
 
-    @objc private func toggleBounce() {
-        touchBar.bounceStripBot.toggle()
-        onRefresh()
-    }
-
-    @objc private func toggleLogin() {
-        do {
-            if launchesAtLogin {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            Log.line("launch at login failed: \(error)")
-        }
-        onRefresh()
-    }
-
-    @objc private func aboutClicked() {
-        var tracker = ChipSources.names(chips.filter { $0.source == .tokenTracker })
-        if today != nil { tracker.insert("Today", at: 0) }
-        let fallback = ChipSources.names(chips.filter { $0.source == .fallback })
-        AboutPanel.shared.show(tracker: tracker, fallback: fallback)
+    @objc private func settingsClicked() {
+        SettingsWindow.shared.show(chips: chips, today: today, offline: offline, error: lastError)
     }
 
     @objc private func quitClicked() {

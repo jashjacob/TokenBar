@@ -28,7 +28,7 @@ To update later: `git pull`, then `./scripts/install.sh` again.
 
 ## Fallbacks
 
-TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in the menu, TokenBar asks that tool itself, using the login already on the Mac. The fallback owns every window for that tool. It checks again after five minutes, not on every poll.
+TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in Settings, TokenBar asks that tool itself, using the login already on the Mac. The fallback owns every window for that tool. It checks again after five minutes, not on every poll.
 
 | Tool | Fallback |
 |---|---|

@@ -122,10 +122,17 @@ enum LimitsClient {
     }
 
     static func discoverPort() -> Int {
-        let stored = UserDefaults.standard.integer(forKey: "tokenTrackerPort")
+        let stored = UserDefaults.standard.integer(forKey: portKey)
         guard (1...65_535).contains(stored) else { return defaultPort }
         return stored
     }
+
+    static func setTrackerPort(_ port: Int) {
+        guard (1...65_535).contains(port) else { return }
+        UserDefaults.standard.set(port, forKey: portKey)
+    }
+
+    private static let portKey = "tokenTrackerPort"
 
     static func dashboardURL() -> URL {
         URL(string: "http://127.0.0.1:\(discoverPort())/limits")!

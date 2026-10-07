@@ -183,11 +183,87 @@ enum KimiFallback {
 
     private static func makeChips(_ body: [String: Any]) -> [Chip] {
         let usages = body["usages"] as? [String: Any] ?? [:]
-        return [
+        var chips = [
             window(usages["limit_5h"], id: "kimi.secondary_window", label: "Kimi 5h", seconds: 5 * 3600),
             window(usages["limit_7d"], id: "kimi.primary_window", label: "Kimi 7d", seconds: 7 * 24 * 3600),
             window(usages["limit_month_total"], id: "kimi.tertiary_window", label: "Kimi mo", seconds: 30 * 24 * 3600),
         ].compactMap { $0 }
+        // `used_ratio` can stay at 0 after the 5h window fills. The quota page reads `limits`.
+        for counted in countWindows(body["limits"]) {
+            if let index = chips.firstIndex(where: { $0.id == counted.id }) {
+                let current = chips[index]
+                if current.percent == 0, counted.percent > 0, sameReset(current.resetAt, counted.resetAt) {
+                    chips[index] = counted
+                }
+            } else {
+                chips.append(counted)
+            }
+        }
+        return chips
+    }
+
+    /// 300-minute and 7-day entries from `limits`, as used/limit percent.
+    private static func countWindows(_ raw: Any?) -> [Chip] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        var chips: [Chip] = []
+        for item in items {
+            let windowInfo = item["window"] as? [String: Any] ?? [:]
+            guard let spec = countSpec(
+                duration: ChipParser.number(windowInfo["duration"]),
+                unit: windowInfo["timeUnit"] as? String
+            ) else { continue }
+            let detail = item["detail"] as? [String: Any] ?? item
+            guard let percent = countPercent(detail) else { continue }
+            chips.append(Chip(
+                id: spec.id,
+                label: spec.label,
+                percent: percent,
+                resetAt: isoDate(detail["resetTime"] ?? detail["reset_time"]),
+                windowSeconds: spec.seconds,
+                source: .fallback
+            ))
+        }
+        return chips
+    }
+
+    private static func countSpec(duration: Double?, unit: String?) -> (id: String, label: String, seconds: Double)? {
+        guard let duration, duration > 0, let unit else { return nil }
+        let name = unit.uppercased()
+        let minutes: Double
+        if name.contains("MINUTE") {
+            minutes = duration
+        } else if name.contains("HOUR") {
+            minutes = duration * 60
+        } else if name.contains("DAY") {
+            minutes = duration * 24 * 60
+        } else {
+            return nil
+        }
+        if abs(minutes - 300) < 0.5 {
+            return ("kimi.secondary_window", "Kimi 5h", 5 * 3600)
+        }
+        if abs(minutes - 7 * 24 * 60) < 0.5 {
+            return ("kimi.primary_window", "Kimi 7d", 7 * 24 * 3600)
+        }
+        return nil
+    }
+
+    private static func countPercent(_ detail: [String: Any]) -> Double? {
+        guard let limit = ChipParser.number(detail["limit"]), limit > 0 else { return nil }
+        let used: Double
+        if let value = ChipParser.number(detail["used"]) {
+            used = value
+        } else if let remaining = ChipParser.number(detail["remaining"]) {
+            used = limit - remaining
+        } else {
+            return nil
+        }
+        return min(max(used / limit * 100, 0), 100)
+    }
+
+    private static func sameReset(_ lhs: Date?, _ rhs: Date?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return abs(lhs.timeIntervalSince(rhs)) <= 2
     }
 
     private static func window(_ raw: Any?, id: String, label: String, seconds: Double) -> Chip? {
@@ -266,10 +342,26 @@ enum KimiFallback {
 
     private static func isoDate(_ value: Any?) -> Date? {
         guard let text = value as? String, !text.isEmpty else { return nil }
+        let trimmed = trimmedFraction(text)
+        let candidates = trimmed == text ? [text] : [text, trimmed]
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
+        for candidate in candidates {
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: candidate) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: candidate) { return date }
+        }
+        return nil
+    }
+
+    /// `08:43:00.112869Z` does not parse until the fraction is milliseconds.
+    private static func trimmedFraction(_ text: String) -> String {
+        guard let dot = text.firstIndex(of: ".") else { return text }
+        let afterDot = text.index(after: dot)
+        guard let zone = text[afterDot...].firstIndex(where: { !$0.isNumber }) else { return text }
+        let digits = text.distance(from: afterDot, to: zone)
+        guard digits > 3 else { return text }
+        let end = text.index(dot, offsetBy: 4)
+        return String(text[..<end] + text[zone...])
     }
 }

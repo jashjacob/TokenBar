@@ -88,12 +88,15 @@ struct Chip: Equatable, Identifiable {
         "\(label) \(countdownText)"
     }
 
+    /// Menu row. The percent stays. The countdown lives on the Touch Bar.
     var menuTitle: String {
-        let pct = String(format: "%.0f%%", percent)
-        if remaining != nil {
-            return "\(label)  \(pct)  \(countdownText)"
-        }
-        return "\(label)  \(pct)"
+        String(format: "%@  %.0f%%", label, percent)
+    }
+
+    /// Tooltip keeps the countdown, which the menu row no longer shows.
+    var tooltipTitle: String {
+        guard remaining != nil else { return menuTitle }
+        return "\(menuTitle)  \(countdownText)"
     }
 }
 
