@@ -72,6 +72,17 @@ enum LimitsClient {
             loader: CodexFallback.chips,
             log: "codex"
         )
+        chips = await fill(
+            chips,
+            ids: [
+                "antigravity.primary_window",
+                "antigravity.secondary_window",
+                "antigravity.tertiary_window",
+                "antigravity.quaternary_window",
+            ],
+            loader: AntigravityFallback.chips,
+            log: "antigravity"
+        )
         refreshFallbacksNow = false
         if chips.isEmpty, let trackerError {
             throw trackerError

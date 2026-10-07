@@ -39,7 +39,7 @@ TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in t
 | Kimi | In |
 | Claude | Not yet |
 | ChatGPT / Codex | In |
-| Antigravity | Not yet |
+| Antigravity | In |
 
 ## For coding agents
 
