@@ -23,6 +23,7 @@ enum ChipSources {
         case "grok": return "Grok"
         case "opencodeGo": return "OpenCode"
         case "commandCode": return "Command Code"
+        case "kimi": return "Kimi"
         case "antigravity": return "Antigravity"
         case "gemini": return "Gemini"
         default: return id

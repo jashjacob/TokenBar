@@ -60,6 +60,18 @@ enum LimitsClient {
             loader: CursorFallback.chips,
             log: "cursor"
         )
+        chips = await fill(
+            chips,
+            ids: ["kimi.primary_window", "kimi.secondary_window"],
+            loader: KimiFallback.chips,
+            log: "kimi"
+        )
+        chips = await fill(
+            chips,
+            ids: ["codex.primary_window", "codex.secondary_window"],
+            loader: CodexFallback.chips,
+            log: "codex"
+        )
         refreshFallbacksNow = false
         if chips.isEmpty, let trackerError {
             throw trackerError

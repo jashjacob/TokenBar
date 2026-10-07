@@ -28,7 +28,7 @@ To update later: `git pull`, then `./scripts/install.sh` again.
 
 ## Fallbacks
 
-TokenTracker sometimes comes back stale or empty. A fallback then asks that tool itself and owns every window for it.
+TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in the menu, TokenBar asks that tool itself, using the login already on the Mac. The fallback owns every window for that tool. It checks again after five minutes, not on every poll.
 
 | Tool | Fallback |
 |---|---|
@@ -36,8 +36,9 @@ TokenTracker sometimes comes back stale or empty. A fallback then asks that tool
 | OpenCode | In |
 | Grok | In |
 | Cursor | In |
+| Kimi | In |
 | Claude | Not yet |
-| ChatGPT / Codex | Not yet |
+| ChatGPT / Codex | In |
 | Antigravity | Not yet |
 
 ## For coding agents
