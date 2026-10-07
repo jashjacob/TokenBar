@@ -33,7 +33,7 @@ enum ChipParser {
         ProviderSpec(jsonKey: "cursor", includeSecondary: false, windows: [
             WindowSpec(jsonKey: "primary_window", label: "Cursor", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
         ], also: [
-            WindowSpec(jsonKey: "quaternary_window", label: "Grok Bot", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
+            WindowSpec(jsonKey: "quaternary_window", label: "GrokBot", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),
         ]),
         ProviderSpec(jsonKey: "grok", includeSecondary: true, windows: [
             WindowSpec(jsonKey: "primary_window", label: "Grok 7d", utilizationKeys: ["used_percent"], resetKeys: ["reset_at"]),

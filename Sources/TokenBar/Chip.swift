@@ -86,11 +86,16 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
-    /// Used when the chip is too narrow for `shortName` (`CmdCode` → `CmdC`).
+    /// A full 5-hour window. The bar and the 100% are redundant, so the card stacks.
+    var showsStackedFull: Bool {
+        windowTag == "5h" && remaining != nil && Int(percent.rounded()) >= 100
+    }
+
+    /// Used when the strip is crowded (`CmdCode` → `CmdC`, `OpenCode` → `OC`).
     var compactName: String? {
         switch shortName {
         case "CmdCode", "Command Code": return "CmdC"
-        case "OpenCode": return "OpenC"
+        case "OpenCode": return "OC"
         default: return nil
         }
     }

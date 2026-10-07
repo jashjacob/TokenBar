@@ -41,6 +41,20 @@ enum ChipLayout {
         let nameW = (name as NSString).size(withAttributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
         ]).width
+        let time = compactTime ? chip.compactCountdownText : chip.countdownText
+        let timeW = (time as NSString).size(withAttributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+        ]).width
+        if chip.showsStackedFull {
+            var top = nameW
+            if let tag = chip.windowTag {
+                let tagW = (tag as NSString).size(withAttributes: [
+                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
+                ]).width + 6
+                top += 3 + tagW
+            }
+            return ceil(10 + max(top, timeW))
+        }
         var inner = nameW
         if let tag = chip.windowTag {
             let tagW = (tag as NSString).size(withAttributes: [
@@ -48,15 +62,12 @@ enum ChipLayout {
             ]).width + 6
             inner += 3 + tagW
         }
-        let time = compactTime ? chip.compactCountdownText : chip.countdownText
-        let timeW = (time as NSString).size(withAttributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
-        ]).width
         return ceil(10 + inner + 6 + timeW)
     }
 
-    /// Hug each chip's text. CmdCode/OpenCode can shrink to CmdC/OpenC. Claude, Codex,
-    /// Grok never go below their full name — extra cards clip off the right instead.
+    /// Hug each chip's text. OpenCode stays whole unless GrokBot is on a crowded
+    /// strip, where it becomes OC so that card can fit. Countdowns shorten only
+    /// after that. Claude, Codex, and Grok keep their full names.
     static func sized(_ chips: [Chip], budget: CGFloat) -> [String: CGFloat] {
         guard !chips.isEmpty else { return [:] }
         let maxExtra: CGFloat
@@ -65,18 +76,23 @@ enum ChipLayout {
         case 3, 4: maxExtra = 6
         default: maxExtra = 0
         }
-        if let fitted = pack(chips, budget: budget, abbrevNames: false, compactTime: false, maxExtra: maxExtra) {
-            return fitted
+        let grokBotOn = chips.contains { $0.shortName == "GrokBot" }
+        let full = pack(chips, budget: budget, abbrevNames: false, compactTime: false, maxExtra: maxExtra)
+        let shortNames = grokBotOn
+            ? pack(chips, budget: budget, abbrevNames: true, compactTime: false, maxExtra: 0)
+            : nil
+        if let full {
+            let spare = budget - full.values.reduce(0, +)
+            if grokBotOn, spare < 40, let shortNames { return shortNames }
+            return full
         }
-        if let fitted = pack(chips, budget: budget, abbrevNames: false, compactTime: true, maxExtra: 0) {
-            return fitted
-        }
-        if let fitted = pack(chips, budget: budget, abbrevNames: true, compactTime: true, maxExtra: 0) {
+        if let shortNames { return shortNames }
+        if let fitted = pack(chips, budget: budget, abbrevNames: grokBotOn, compactTime: true, maxExtra: 0) {
             return fitted
         }
         var out: [String: CGFloat] = [:]
         for chip in chips {
-            out[chip.id] = contentWidth(for: chip, abbrevNames: true, compactTime: true)
+            out[chip.id] = contentWidth(for: chip, abbrevNames: grokBotOn, compactTime: true)
         }
         return out
     }

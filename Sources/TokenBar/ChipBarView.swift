@@ -99,13 +99,52 @@ final class ChipBarView: NSButton {
             glow.fill()
         }
 
+        if chip.showsStackedFull, !celebrating, !pacing {
+            drawStackedFull(in: pad, tint: tint)
+            return
+        }
         drawHeader(in: pad, tint: tint, celebrating: celebrating, pacing: pacing)
         drawBar(in: pad, tint: tint, celebrating: celebrating, pacing: pacing)
     }
 
+    /// Full 5h card: `Kimi 5h` on top, the countdown under it. No bar, no 100%.
+    private func drawStackedFull(in pad: NSRect, tint: NSColor) {
+        let nameAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor.white,
+        ]
+        let tagAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
+            .foregroundColor: tint,
+        ]
+        let timeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: tint,
+        ]
+        let tag = chip.windowTag.map { $0 as NSString }
+        let tagSize = tag?.size(withAttributes: tagAttrs) ?? .zero
+        let tagReserve: CGFloat = tag == nil ? 0 : tagSize.width + 8
+        let shown = Self.name(for: chip, budget: max(0, pad.width - tagReserve), attrs: nameAttrs)
+        let shownW = shown.size(withAttributes: nameAttrs).width
+        var x = pad.minX
+        if shownW >= 1 {
+            shown.draw(in: NSRect(x: x, y: pad.minY, width: min(shownW, pad.width - tagReserve), height: 12), withAttributes: nameAttrs)
+            x += min(shownW, pad.width - tagReserve) + 3
+        }
+        if let tag {
+            let pill = NSRect(x: x - 1, y: pad.minY, width: tagSize.width + 6, height: 12)
+            tint.withAlphaComponent(0.22).setFill()
+            NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3).fill()
+            tag.draw(at: NSPoint(x: pill.minX + 3, y: pad.minY), withAttributes: tagAttrs)
+        }
+        let time = chip.countdownText as NSString
+        let timeW = time.size(withAttributes: timeAttrs).width
+        time.draw(at: NSPoint(x: pad.midX - timeW / 2, y: pad.minY + 13), withAttributes: timeAttrs)
+    }
+
     /// Name (truncated) + tag on the left, countdown on the right. Time stays;
     /// the name yields first, then the countdown shortens to `5h` / `3d`.
-    /// Full name if it fits; CmdCode/OpenCode become CmdC/OpenC. Claude and friends stay whole.
+    /// Full name if it fits; CmdCode/OpenCode become CmdC/OC. Claude and friends stay whole.
     private static func name(for chip: Chip, budget: CGFloat, attrs: [NSAttributedString.Key: Any]) -> NSString {
         let full = chip.shortName as NSString
         if full.size(withAttributes: attrs).width <= budget { return full }
