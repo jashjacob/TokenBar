@@ -16,6 +16,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var lastCelebratedAt: [String: Date] = [:]
     /// Reset time we already flashed for. A slide under two minutes is the same window.
     private var paceFlashedReset: [String: Date] = [:]
+    private var demoPending = false
+    private var demoRunning = false
+    private var demoID = 0
     var onCollapsed: (() -> Void)?
 
     var isPinned: Bool {
@@ -54,6 +57,21 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if isPinned {
             presentExpanded()
         }
+        let demoFlag = URL(fileURLWithPath: "/tmp/tokenbar-demo-flashes")
+        if FileManager.default.fileExists(atPath: demoFlag.path) {
+            demoPending = true
+            try? FileManager.default.removeItem(at: demoFlag)
+            Log.line("pace demo armed")
+        }
+    }
+
+    /// Plays the three chip states in order on the leftmost card: amber `49m`, amber `1m`, green `RESET`.
+    func previewFlashes() {
+        demoID += 1
+        demoRunning = false
+        demoPending = true
+        guard !chips.isEmpty else { return }
+        beginDemo()
     }
 
     func stop() {
@@ -74,8 +92,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let visible = ChipLayout.ordered(chips).filter { ChipPreferences.isVisible($0.id) }
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
-        let resetIDs = offline ? [] : detectResets(in: visible)
-        let paceIDs = offline ? [] : detectPaceFlashes(in: visible).filter { !resetIDs.contains($0) }
+        let resetIDs = offline || demoPending || demoRunning ? [] : detectResets(in: visible)
+        let paceIDs = offline || demoPending || demoRunning ? [] : detectPaceFlashes(in: visible).filter { !resetIDs.contains($0) }
         self.chips = visible
         self.today = today
         self.offline = offline
@@ -96,6 +114,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.flashPace(paceIDs)
             }
+        }
+        if demoPending, !visible.isEmpty {
+            beginDemo()
         }
     }
 
@@ -248,6 +269,43 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         return fired
     }
 
+    private func beginDemo() {
+        guard demoPending, !demoRunning else { return }
+        demoPending = false
+        demoRunning = true
+        demoID += 1
+        let id = demoID
+        if isPinned { presentExpanded() }
+        Log.line("pace demo starting on \(chips.first?.label ?? "chip")")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.playDemo(step: 0, id: id)
+        }
+    }
+
+    private func playDemo(step: Int, id: Int) {
+        guard id == demoID else { return }
+        guard let chip = chips.first else {
+            demoRunning = false
+            return
+        }
+        switch step {
+        case 0:
+            paintPace([chip.id: "49m"])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                self?.playDemo(step: 1, id: id)
+            }
+        case 1:
+            paintPace([chip.id: "1m"])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                self?.playDemo(step: 2, id: id)
+            }
+        default:
+            celebrate([chip.id])
+            Log.line("demo reset on \(chip.label)")
+            demoRunning = false
+        }
+    }
+
     private func flashPace(_ ids: [String], attempt: Int = 0) {
         var labels: [String: String] = [:]
         for id in ids {
@@ -255,6 +313,10 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             labels[id] = text
         }
         guard !labels.isEmpty else { return }
+        paintPace(labels, attempt: attempt, ids: ids)
+    }
+
+    private func paintPace(_ labels: [String: String], attempt: Int = 0, ids: [String]? = nil) {
         if isPinned, stripView == nil { presentExpanded() }
         if stripView?.playPace(labels) == true {
             for (id, text) in labels {
@@ -265,12 +327,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             return
         }
         guard attempt < 20 else {
-            for id in ids { paceFlashedReset.removeValue(forKey: id) }
+            for id in ids ?? Array(labels.keys) { paceFlashedReset.removeValue(forKey: id) }
             Log.line("pace flash missed, strip not ready")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.flashPace(ids, attempt: attempt + 1)
+            self?.paintPace(labels, attempt: attempt + 1, ids: ids)
         }
     }
 }
