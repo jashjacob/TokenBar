@@ -122,6 +122,7 @@ enum Countdown {
         if interval <= 0 { return "now" }
         let t = Int(interval.rounded(.down))
         if t < 60 { return "\(t)s" }
+        if t < 120 { return String(format: "1m%02ds", t % 60) }
         if t < 3600 { return "\(t / 60)m" }
         if t < 86_400 {
             let h = t / 3600
@@ -137,7 +138,7 @@ enum Countdown {
         if interval.isNaN { return "—" }
         if interval <= 0 { return "now" }
         let t = Int(interval.rounded(.down))
-        if t < 60 { return "\(t)s" }
+        if t < 120 { return "\(t)s" }
         if t < 3600 { return "\(t / 60)m" }
         if t < 86_400 { return "\(t / 3600)h" }
         return "\(t / 86_400)d"

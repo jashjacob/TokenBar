@@ -4,6 +4,7 @@ struct ChipSnapshot {
     var percent: Double
     var resetAt: Date?
     var remaining: TimeInterval?
+    var source: ChipSource
 }
 
 enum ResetDetector {

@@ -195,9 +195,17 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private func detectResets(in chips: [Chip]) -> [String] {
         var fired: [String] = []
         for chip in chips {
-            let snapshot = ChipSnapshot(percent: chip.percent, resetAt: chip.resetAt, remaining: chip.remaining)
+            let snapshot = ChipSnapshot(
+                percent: chip.percent,
+                resetAt: chip.resetAt,
+                remaining: chip.remaining,
+                source: chip.source
+            )
             defer { snapshots[chip.id] = snapshot }
             guard let old = snapshots[chip.id] else { continue }
+            // A fallback taking over, or TokenTracker coming back, moves resetAt
+            // without the quota actually resetting.
+            if old.source != chip.source { continue }
             let last = lastCelebratedAt[chip.id] ?? .distantPast
             guard Date().timeIntervalSince(last) > 60 else { continue }
             if ResetDetector.didReset(old: old, new: chip) {

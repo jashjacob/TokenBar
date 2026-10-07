@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class StatusItemController: NSObject {
+final class StatusItemController: NSObject, NSMenuDelegate {
     private let item: NSStatusItem
     private let touchBar: TouchBarController
     private let onRefresh: () -> Void
@@ -10,6 +10,8 @@ final class StatusItemController: NSObject {
     private var today: TodayUsage?
     private var offline = true
     private var lastError: String?
+    private var menuOpen = false
+    private var menuDirty = false
 
     init(
         touchBar: TouchBarController,
@@ -48,12 +50,50 @@ final class StatusItemController: NSObject {
             lines.append(contentsOf: chips.filter { ChipPreferences.isVisible($0.id) }.map(\.tooltipTitle))
             button.toolTip = error ?? (lines.isEmpty ? "TokenBar" : lines.joined(separator: "\n"))
         }
-        reloadMenu()
+        if menuOpen {
+            menuDirty = true
+            SettingsWindow.shared.update(chips: chips, today: today, offline: offline, error: lastError)
+            return
+        }
+        installMenu()
     }
 
     func reloadMenu() {
-        item.menu = buildMenu(chips: chips, today: today, offline: offline, error: lastError)
+        if menuOpen {
+            menuDirty = true
+            SettingsWindow.shared.update(chips: chips, today: today, offline: offline, error: lastError)
+            return
+        }
+        installMenu()
+    }
+
+    private func installMenu() {
+        menuDirty = false
+        let menu = buildMenu(chips: chips, today: today, offline: offline, error: lastError)
+        menu.delegate = self
+        item.menu = menu
         SettingsWindow.shared.update(chips: chips, today: today, offline: offline, error: lastError)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuOpen = false
+        guard menuDirty else { return }
+        installMenu()
+    }
+
+    private func refreshOpenMenu() {
+        guard let menu = item.menu else { return }
+        for row in menu.items {
+            if let id = row.representedObject as? String {
+                row.state = ChipPreferences.isVisible(id) ? .on : .off
+            } else if row.title == "Pin Touch Bar" {
+                row.state = touchBar.isPinned ? .on : .off
+            }
+        }
     }
 
     private func applyIcon(offline: Bool) {
@@ -140,16 +180,19 @@ final class StatusItemController: NSObject {
     @objc private func toggleChip(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         ChipPreferences.toggle(id)
+        refreshOpenMenu()
         onVisibilityChange()
     }
 
     @objc private func showAllClicked() {
         ChipPreferences.setAllVisible(allIDs(), true)
+        refreshOpenMenu()
         onVisibilityChange()
     }
 
     @objc private func hideAllClicked() {
         ChipPreferences.setAllVisible(allIDs(), false)
+        refreshOpenMenu()
         onVisibilityChange()
     }
 
@@ -164,6 +207,7 @@ final class StatusItemController: NSObject {
 
     @objc private func togglePin() {
         touchBar.isPinned.toggle()
+        refreshOpenMenu()
         onRefresh()
     }
 
