@@ -107,7 +107,7 @@ final class ChipBarView: NSButton {
         drawBar(in: pad, tint: tint, celebrating: celebrating, pacing: pacing)
     }
 
-    /// Full 5h card: `Kimi 5h` on top, the countdown under it. No bar, no 100%.
+    /// Full card: name and tag on top, the countdown under it. No bar, no 100%.
     private func drawStackedFull(in pad: NSRect, tint: NSColor) {
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
@@ -137,6 +137,7 @@ final class ChipBarView: NSButton {
             NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3).fill()
             tag.draw(at: NSPoint(x: pill.minX + 3, y: pad.minY), withAttributes: tagAttrs)
         }
+        guard chip.remaining != nil else { return }
         let time = chip.countdownText as NSString
         let timeW = time.size(withAttributes: timeAttrs).width
         time.draw(at: NSPoint(x: pad.midX - timeW / 2, y: pad.minY + 13), withAttributes: timeAttrs)

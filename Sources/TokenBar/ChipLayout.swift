@@ -12,6 +12,7 @@ enum ChipLayout {
 
     static func ordered(_ chips: [Chip]) -> [Chip] {
         chips.sorted { a, b in
+            if a.showsStackedFull != b.showsStackedFull { return !a.showsStackedFull }
             let a5 = isSession(a)
             let b5 = isSession(b)
             if a5 != b5 { return a5 }
@@ -53,7 +54,8 @@ enum ChipLayout {
                 ]).width + 6
                 top += 3 + tagW
             }
-            return ceil(10 + max(top, timeW))
+            let bottom = chip.remaining == nil ? 0 : timeW
+            return ceil(10 + max(top, bottom))
         }
         var inner = nameW
         if let tag = chip.windowTag {

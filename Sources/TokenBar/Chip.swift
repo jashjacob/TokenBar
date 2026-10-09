@@ -86,9 +86,9 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
-    /// A full 5-hour window. The bar and the 100% are redundant, so the card stacks.
+    /// Any window at 100%. The bar and the percent are redundant, so the card stacks.
     var showsStackedFull: Bool {
-        windowTag == "5h" && remaining != nil && Int(percent.rounded()) >= 100
+        Int(percent.rounded()) >= 100
     }
 
     /// Used when the strip is crowded (`CmdCode` → `CmdC`, `OpenCode` → `OC`).
