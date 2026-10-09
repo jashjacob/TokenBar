@@ -45,6 +45,36 @@ struct Chip: Equatable, Identifiable {
         resetAt.map { $0.timeIntervalSinceNow }
     }
 
+    /// Keeps a countdown across a reset. A feed sometimes drops `resetAt` the
+    /// moment a window ends; the next boundary is one window length later.
+    func withClock(previousReset: Date? = nil, now: Date = Date()) -> Chip {
+        let anchor = resetAt ?? previousReset
+        guard let anchor, let windowSeconds, windowSeconds >= 60 else { return self }
+        if anchor.timeIntervalSince(now) > 0 {
+            guard resetAt == nil else { return self }
+            return copy(percent: percent, resetAt: anchor)
+        }
+        let overdue = now.timeIntervalSince(anchor)
+        let steps = max(1, min(24, Int((overdue / windowSeconds).rounded(.up))))
+        let next = anchor.addingTimeInterval(Double(steps) * windowSeconds)
+        guard next.timeIntervalSince(now) > 0 else { return self }
+        let nextPercent = showsStackedFull ? 0 : percent
+        return copy(percent: nextPercent, resetAt: next)
+    }
+
+    private func copy(percent: Double, resetAt: Date?) -> Chip {
+        var chip = Chip(
+            id: id,
+            label: label,
+            percent: percent,
+            resetAt: resetAt,
+            windowSeconds: windowSeconds,
+            source: source
+        )
+        chip.fetchedAt = fetchedAt
+        return chip
+    }
+
     /// Even-burn position (0...1): how much of the window may be used by now.
     var paceFraction: Double? {
         guard let windowSeconds, windowSeconds > 0, let remaining else { return nil }

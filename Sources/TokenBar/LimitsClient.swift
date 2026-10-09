@@ -98,7 +98,9 @@ enum LimitsClient {
         log: String
     ) async -> [Chip] {
         guard ChipPreferences.fallbacksEnabled else { return chips }
-        let have = Set(chips.map(\.id))
+        // A window with no reset time cannot show the next countdown. Let the
+        // fallback supply one; a 5-minute cache keeps this off the 30-second poll.
+        let have = Set(chips.compactMap { $0.resetAt == nil ? nil : $0.id })
         guard ids.contains(where: { !have.contains($0) }) else { return chips }
         let now = Date()
         let extra: [Chip]

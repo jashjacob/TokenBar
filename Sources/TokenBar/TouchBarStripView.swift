@@ -14,9 +14,18 @@ final class TouchBarStripView: NSView {
     private var tokenView: TodayBarView?
     private var costView: TodayBarView?
     private var chipViews: [String: ChipBarView] = [:]
-    private let overflowBadge = OverflowBadge()
+    private let chipClip = ChipClip(frame: .zero)
+    private let leadingHint = EdgeHint(side: .leading)
+    private let trailingHint = EdgeHint(side: .trailing)
     private let marquee = MarqueeBanner()
     private var marqueeUp = false
+    private var chipOffset: CGFloat = 0
+    private var dragOriginX: CGFloat = 0
+    private var dragOriginOffset: CGFloat = 0
+    private var dragPastSlop = false
+    private var dragActive = false
+    private var laidOutIDs: [String] = []
+    private var loggedHidden = -1
 
     override var isFlipped: Bool { true }
     override var intrinsicContentSize: NSSize { NSSize(width: 680, height: 30) }
@@ -26,8 +35,18 @@ final class TouchBarStripView: NSView {
         clipsToBounds = true
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        overflowBadge.isHidden = true
-        addSubview(overflowBadge)
+        allowedTouchTypes = [.direct]
+        let pan = NSPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+        pan.allowedTouchTypes = [.direct]
+        pan.delaysPrimaryMouseButtonEvents = true
+        addGestureRecognizer(pan)
+        chipClip.wantsLayer = true
+        chipClip.layer?.masksToBounds = true
+        addSubview(chipClip)
+        leadingHint.isHidden = true
+        trailingHint.isHidden = true
+        addSubview(leadingHint)
+        addSubview(trailingHint)
         marquee.isHidden = true
         addSubview(marquee)
     }
@@ -97,11 +116,14 @@ final class TouchBarStripView: NSView {
             for view in chipViews.values { view.isHidden = true }
             tokenView?.isHidden = true
             costView?.isHidden = true
-            overflowBadge.isHidden = true
+            chipClip.isHidden = true
+            leadingHint.isHidden = true
+            trailingHint.isHidden = true
             marquee.isHidden = false
             marquee.frame = bounds
             return
         }
+        chipClip.isHidden = false
         tokenView?.isHidden = false
         costView?.isHidden = false
         let spacing = ChipLayout.spacing
@@ -121,51 +143,141 @@ final class TouchBarStripView: NSView {
             x += w + spacing
         }
 
-        for view in chipViews.values { view.isHidden = true }
-        overflowBadge.isHidden = true
-        let n = chips.count
-        guard n > 0, bounds.width > 1 else { return }
-        let gaps = CGFloat(max(0, n - 1)) * spacing
-        let budget = max(0, bounds.width - x - gaps)
-        let widths = ChipLayout.sized(chips, budget: budget)
-        let fit = fittedCount(widths: widths, start: x, limit: bounds.width)
-        for chip in chips.prefix(fit) {
+        let clipW = max(0, bounds.width - x)
+        chipClip.frame = NSRect(x: x, y: 0, width: clipW, height: height)
+        layoutChips(in: clipW, height: height, spacing: spacing)
+    }
+
+    /// Every checked chip stays in one row. Today stays put. A finger drag
+    /// slides the row, and an arrow stays on the edge while any chip is past it.
+    private func layoutChips(in clipW: CGFloat, height: CGFloat, spacing: CGFloat) {
+        let ids = chips.map(\.id)
+        if ids != laidOutIDs {
+            laidOutIDs = ids
+            chipOffset = 0
+        }
+        guard !chips.isEmpty, clipW > 1 else {
+            leadingHint.isHidden = true
+            trailingHint.isHidden = true
+            return
+        }
+        let widths = ChipLayout.sized(chips, budget: clipW)
+        let row = chips.reduce(CGFloat(0)) { $0 + (widths[$1.id] ?? 0) }
+            + CGFloat(max(0, chips.count - 1)) * spacing
+        let overflow = row - clipW
+        let canScroll = overflow > 12
+        chipOffset = canScroll ? min(max(0, chipOffset), overflow) : 0
+
+        var cursor = -chipOffset
+        var hiddenNames: [String] = []
+        for chip in chips {
             let w = widths[chip.id] ?? 0
             guard w >= 1, let view = chipViews[chip.id] else { continue }
             view.isHidden = false
             view.layoutWidth = w
-            view.frame = NSRect(x: x, y: 0, width: w, height: height)
-            x += w + spacing
+            view.frame = NSRect(x: cursor, y: 0, width: w, height: height)
+            if canScroll, cursor + w > clipW + 1 {
+                hiddenNames.append(chip.label)
+            }
+            cursor += w + spacing
         }
-        let hidden = n - fit
-        guard hidden > 0 else { return }
-        if fit > 0 { x -= spacing }
-        let badgeW = OverflowBadge.width(for: hidden)
-        let badgeX = min(x + (fit > 0 ? spacing : 0), max(x, bounds.width - badgeW))
-        overflowBadge.count = hidden
-        overflowBadge.names = chips.dropFirst(fit).map(\.label)
-        overflowBadge.alphaValue = dimmed ? 0.4 : 1
-        overflowBadge.isHidden = false
-        overflowBadge.frame = NSRect(x: badgeX, y: 0, width: min(badgeW, bounds.width - badgeX), height: height)
-        addSubview(overflowBadge)
-    }
 
-    /// How many leading chips fit at full width, leaving room for a +N badge when some do not.
-    private func fittedCount(widths: [String: CGFloat], start: CGFloat, limit: CGFloat) -> Int {
-        func rowWidth(_ count: Int) -> CGFloat {
-            guard count > 0 else { return 0 }
-            let sum = chips.prefix(count).reduce(CGFloat(0)) { $0 + (widths[$1.id] ?? 0) }
-            return sum + CGFloat(count - 1) * ChipLayout.spacing
-        }
-        if start + rowWidth(chips.count) <= limit + 0.5 { return chips.count }
-        for count in stride(from: chips.count - 1, through: 0, by: -1) {
-            let hidden = chips.count - count
-            let gap: CGFloat = count > 0 ? ChipLayout.spacing : 0
-            if start + rowWidth(count) + gap + OverflowBadge.width(for: hidden) <= limit + 0.5 {
-                return count
+        let trailingW = EdgeHint.width(count: hiddenNames.count, side: .trailing)
+        trailingHint.count = hiddenNames.count
+        trailingHint.names = hiddenNames
+        trailingHint.alphaValue = dimmed ? 0.4 : 1
+        trailingHint.isHidden = hiddenNames.isEmpty
+        trailingHint.frame = NSRect(
+            x: bounds.width - trailingW,
+            y: 0,
+            width: trailingW,
+            height: height
+        )
+
+        let canSlideBack = chipOffset > 0.5
+        leadingHint.alphaValue = dimmed ? 0.4 : 1
+        leadingHint.isHidden = !canSlideBack
+        leadingHint.frame = NSRect(x: chipClip.frame.minX, y: 0, width: EdgeHint.leadingWidth, height: height)
+        addSubview(leadingHint)
+        addSubview(trailingHint)
+
+        if hiddenNames.count != loggedHidden {
+            loggedHidden = hiddenNames.count
+            if hiddenNames.isEmpty {
+                Log.line("strip fits")
+            } else {
+                Log.line("strip scrolls, \(hiddenNames.count) past the right edge: \(hiddenNames.joined(separator: ", "))")
             }
         }
-        return 0
+    }
+
+    private func dragBegan(at x: CGFloat) {
+        guard !dragActive else { return }
+        dragActive = true
+        dragOriginX = x
+        dragOriginOffset = chipOffset
+        dragPastSlop = false
+    }
+
+    private func dragMoved(to x: CGFloat, chip: ChipBarView?) {
+        let dx = x - dragOriginX
+        if abs(dx) > 8 {
+            dragPastSlop = true
+            chip?.suppressNextClick()
+        }
+        guard dragPastSlop else { return }
+        chipOffset = dragOriginOffset - dx
+        needsLayout = true
+    }
+
+    private func handleTouch(_ event: NSEvent, in view: NSView, phase: Int, chip: ChipBarView?) {
+        guard let touch = event.touches(for: view).first else { return }
+        let x = view.convert(touch.location(in: view), to: self).x
+        if phase == 0 {
+            dragBegan(at: x)
+        } else if phase == 1 {
+            dragMoved(to: x, chip: chip)
+        } else {
+            dragPastSlop = false
+            dragActive = false
+        }
+    }
+
+    override func touchesBegan(with event: NSEvent) {
+        handleTouch(event, in: self, phase: 0, chip: nil)
+    }
+
+    override func touchesMoved(with event: NSEvent) {
+        handleTouch(event, in: self, phase: 1, chip: nil)
+    }
+
+    override func touchesEnded(with event: NSEvent) {
+        handleTouch(event, in: self, phase: 2, chip: nil)
+    }
+
+    override func touchesCancelled(with event: NSEvent) {
+        handleTouch(event, in: self, phase: 3, chip: nil)
+    }
+
+    func relayTouch(_ event: NSEvent, phase: Int) {
+        handleTouch(event, in: chipClip, phase: phase, chip: nil)
+    }
+
+    @objc private func panned(_ pan: NSPanGestureRecognizer) {
+        let x = pan.location(in: self).x
+        switch pan.state {
+        case .began:
+            dragBegan(at: x)
+        case .changed:
+            let hit = chipViews.values.first { view in
+                let local = view.convert(pan.location(in: self), from: self)
+                return view.bounds.contains(local)
+            }
+            dragMoved(to: x, chip: hit)
+        default:
+            dragPastSlop = false
+            dragActive = false
+        }
     }
 
     private func syncToday() {
@@ -214,8 +326,16 @@ final class TouchBarStripView: NSView {
                 view.alphaValue = dimmed ? 0.4 : 1
                 view.target = self
                 view.action = #selector(chipTapped)
-                addSubview(view)
+                view.onStripTouch = { [weak self, weak view] event, phase in
+                    guard let self, let view else { return }
+                    self.handleTouch(event, in: view, phase: phase, chip: view)
+                }
+                chipClip.addSubview(view)
                 chipViews[chip.id] = view
+            }
+            if let view = chipViews[chip.id], view.superview !== chipClip {
+                view.removeFromSuperview()
+                chipClip.addSubview(view)
             }
         }
     }
@@ -224,36 +344,92 @@ final class TouchBarStripView: NSView {
     @objc private func todayTapped() { onTodayTap?() }
 }
 
-/// "+N" when the strip cannot show every card at full width. Not a button.
-private final class OverflowBadge: NSView {
+/// Clips the chip row and forwards a finger drag to the strip.
+private final class ChipClip: NSView {
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        allowedTouchTypes = [.direct]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func touchesBegan(with event: NSEvent) {
+        (superview as? TouchBarStripView)?.relayTouch(event, phase: 0)
+    }
+
+    override func touchesMoved(with event: NSEvent) {
+        (superview as? TouchBarStripView)?.relayTouch(event, phase: 1)
+    }
+
+    override func touchesEnded(with event: NSEvent) {
+        (superview as? TouchBarStripView)?.relayTouch(event, phase: 2)
+    }
+
+    override func touchesCancelled(with event: NSEvent) {
+        (superview as? TouchBarStripView)?.relayTouch(event, phase: 3)
+    }
+}
+
+/// Arrow on the end of the chip row while sliding would reveal more.
+private final class EdgeHint: NSView {
+    enum Side { case leading, trailing }
+
+    static let leadingWidth: CGFloat = 18
+
+    let side: Side
     var count = 0 {
         didSet {
             guard oldValue != count else { return }
+            toolTip = names.isEmpty ? nil : names.joined(separator: "\n")
             needsDisplay = true
         }
     }
-
     var names: [String] = [] {
         didSet { toolTip = names.isEmpty ? nil : names.joined(separator: "\n") }
     }
 
+    init(side: Side) {
+        self.side = side
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     override var isFlipped: Bool { true }
 
-    static func width(for count: Int) -> CGFloat {
-        let text = "+\(count)" as NSString
-        return ceil(text.size(withAttributes: textAttrs).width + 14)
+    /// Touches pass through to the chip underneath so the row still slides.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    static func width(count: Int, side: Side) -> CGFloat {
+        if side == .leading { return leadingWidth }
+        let text = "\(count)›" as NSString
+        return ceil(text.size(withAttributes: Self.textAttrs).width + 16)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let pill = bounds.insetBy(dx: 0, dy: 6)
-        guard pill.width > 1, pill.height > 1 else { return }
-        NSColor.white.withAlphaComponent(0.16).setFill()
-        NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2).fill()
+        let from: NSPoint
+        let to: NSPoint
+        if side == .trailing {
+            from = NSPoint(x: bounds.minX, y: bounds.midY)
+            to = NSPoint(x: bounds.maxX, y: bounds.midY)
+        } else {
+            from = NSPoint(x: bounds.maxX, y: bounds.midY)
+            to = NSPoint(x: bounds.minX, y: bounds.midY)
+        }
+        let gradient = NSGradient(colors: [
+            NSColor.black.withAlphaComponent(0),
+            NSColor.black.withAlphaComponent(0.78),
+        ])
+        gradient?.draw(from: from, to: to, options: [])
 
-        let text = "+\(count)" as NSString
+        let text = (side == .leading ? "‹" : "\(count)›") as NSString
         let size = text.size(withAttributes: Self.textAttrs)
         let rect = NSRect(
-            x: (bounds.width - size.width) / 2,
+            x: side == .leading ? 1 : bounds.width - size.width - 3,
             y: (bounds.height - size.height) / 2,
             width: ceil(size.width),
             height: ceil(size.height)
@@ -262,8 +438,8 @@ private final class OverflowBadge: NSView {
     }
 
     private static let textAttrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
-        .foregroundColor: NSColor.white.withAlphaComponent(0.92),
+        .font: NSFont.systemFont(ofSize: 12, weight: .bold),
+        .foregroundColor: NSColor.white,
     ]
 }
 

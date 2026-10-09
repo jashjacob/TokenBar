@@ -18,6 +18,9 @@ final class ChipBarView: NSButton {
     private var paceLabel = ""
     private var pulse: CGFloat = 1
     private var pulseTimer: Timer?
+    private var suppressClick = false
+    /// The strip uses a finger-drag to slide the row. A plain tap still clicks.
+    var onStripTouch: ((NSEvent, Int) -> Void)?
 
     var isCelebrating: Bool {
         celebratingUntil.map { $0 > Date() } ?? false
@@ -38,6 +41,35 @@ final class ChipBarView: NSButton {
         isEnabled = true
         setContentHuggingPriority(.required, for: .horizontal)
         setContentCompressionResistancePriority(.required, for: .horizontal)
+        allowedTouchTypes = [.direct]
+    }
+
+    func suppressNextClick() {
+        suppressClick = true
+    }
+
+    override func sendAction(_ action: Selector?, to target: Any?) -> Bool {
+        if suppressClick {
+            suppressClick = false
+            return true
+        }
+        return super.sendAction(action, to: target)
+    }
+
+    override func touchesBegan(with event: NSEvent) {
+        onStripTouch?(event, 0)
+    }
+
+    override func touchesMoved(with event: NSEvent) {
+        onStripTouch?(event, 1)
+    }
+
+    override func touchesEnded(with event: NSEvent) {
+        onStripTouch?(event, 2)
+    }
+
+    override func touchesCancelled(with event: NSEvent) {
+        onStripTouch?(event, 3)
     }
 
     func playReset() {

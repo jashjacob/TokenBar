@@ -14,6 +14,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var reassertWork: DispatchWorkItem?
     private var snapshots: [String: ChipSnapshot] = [:]
     private var lastCelebratedAt: [String: Date] = [:]
+    private var lastOrder: [String] = []
     /// Reset time we already flashed for. A slide under two minutes is the same window.
     private var paceFlashedReset: [String: Date] = [:]
     private var demoPending = false
@@ -89,7 +90,20 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func update(chips: [Chip], today: TodayUsage?, offline: Bool) {
-        let visible = ChipLayout.ordered(chips).filter { ChipPreferences.isVisible($0.id) }
+        let live = chips.map { $0.withClock(previousReset: snapshots[$0.id]?.resetAt) }
+        if !offline {
+            ChipActivity.note(live)
+        }
+        let visible = ChipLayout.ordered(
+            live.filter { ChipPreferences.isVisible($0.id) },
+            activeAt: ChipActivity.activeAt,
+            returnedAt: ChipActivity.returnedAt
+        )
+        let order = visible.map(\.id)
+        if order != lastOrder {
+            lastOrder = order
+            Log.line("strip order: \(ChipLayout.describe(visible, activeAt: ChipActivity.activeAt, returnedAt: ChipActivity.returnedAt))")
+        }
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
         let resetIDs = offline || demoPending || demoRunning ? [] : detectResets(in: visible)
@@ -121,7 +135,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func tick() {
-        stripView?.tick(chips: chips, today: today)
+        let live = chips.map { $0.withClock(previousReset: snapshots[$0.id]?.resetAt) }
+        stripView?.tick(chips: live, today: today)
         refreshStripTitle(offline: offline)
     }
 
@@ -238,7 +253,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             if old.source != chip.source { continue }
             let last = lastCelebratedAt[chip.id] ?? .distantPast
             guard Date().timeIntervalSince(last) > 60 else { continue }
-            if ResetDetector.didReset(old: old, new: chip) {
+            // An unused window resetting does not flash. It was already free.
+            if ResetDetector.didReset(old: old, new: chip), Int(old.percent.rounded()) > 0 {
                 lastCelebratedAt[chip.id] = Date()
                 fired.append(chip.id)
             }

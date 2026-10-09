@@ -10,14 +10,125 @@ enum ChipLayout {
         chip.windowTag == "5h"
     }
 
-    static func ordered(_ chips: [Chip]) -> [Chip] {
-        chips.sorted { a, b in
-            if a.showsStackedFull != b.showsStackedFull { return !a.showsStackedFull }
-            let a5 = isSession(a)
-            let b5 = isSession(b)
-            if a5 != b5 { return a5 }
-            if a.percent != b.percent { return a.percent > b.percent }
-            return (a.remaining ?? .greatestFiniteMagnitude) < (b.remaining ?? .greatestFiniteMagnitude)
+    /// Left to right among the chips already checked on:
+    /// in use, then a full card counting down or a card that just came back,
+    /// then cards that still have some usage, then other full cards, then 0%.
+    static func ordered(
+        _ chips: [Chip],
+        now: Date = Date(),
+        activeAt: [String: Date] = [:],
+        returnedAt: [String: Date] = [:]
+    ) -> [Chip] {
+        chips.enumerated().sorted { lhs, rhs in
+            rank(lhs.element, index: lhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt)
+                < rank(rhs.element, index: rhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt)
+        }.map(\.element)
+    }
+
+    static func describe(
+        _ chips: [Chip],
+        now: Date = Date(),
+        activeAt: [String: Date] = [:],
+        returnedAt: [String: Date] = [:]
+    ) -> String {
+        ordered(chips, now: now, activeAt: activeAt, returnedAt: returnedAt).map { chip in
+            let name = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt).label
+            return "\(chip.label) (\(name))"
+        }.joined(separator: " | ")
+    }
+
+    private struct Rank: Comparable {
+        var band: Int
+        var a: Double
+        var b: Double
+        var c: Double
+        var index: Int
+
+        static func < (lhs: Rank, rhs: Rank) -> Bool {
+            if lhs.band != rhs.band { return lhs.band < rhs.band }
+            if lhs.a != rhs.a { return lhs.a < rhs.a }
+            if lhs.b != rhs.b { return lhs.b < rhs.b }
+            if lhs.c != rhs.c { return lhs.c < rhs.c }
+            return lhs.index < rhs.index
+        }
+    }
+
+    private enum Placement {
+        case active
+        case reminder
+        case working
+        case full
+        case empty
+
+        var label: String {
+            switch self {
+            case .active: return "in use"
+            case .reminder: return "reminder"
+            case .working: return "usage"
+            case .full: return "full"
+            case .empty: return "empty"
+            }
+        }
+
+        var band: Int {
+            switch self {
+            case .active: return 0
+            case .reminder: return 1
+            case .working: return 2
+            case .full: return 3
+            case .empty: return 4
+            }
+        }
+    }
+
+    private static func placement(
+        of chip: Chip,
+        now: Date,
+        activeAt: [String: Date],
+        returnedAt: [String: Date]
+    ) -> Placement {
+        let full = chip.showsStackedFull
+        let empty = Int(chip.percent.rounded()) == 0
+        if fresh(activeAt[chip.id], now: now) { return .active }
+        // A full card stays on the left until that window resets. A reset comes
+        // forward only when the window was actually spent. An empty one was
+        // already free, so its new window is not a reminder.
+        if full, chip.remaining != nil { return .reminder }
+        if fresh(returnedAt[chip.id], now: now) { return .reminder }
+        if empty { return .empty }
+        if full { return .full }
+        return .working
+    }
+
+    private static func fresh(_ stamp: Date?, now: Date) -> Bool {
+        guard let stamp else { return false }
+        let age = now.timeIntervalSince(stamp)
+        return age >= 0 && age < ChipActivity.hold
+    }
+
+    private static func rank(
+        _ chip: Chip,
+        index: Int,
+        now: Date,
+        activeAt: [String: Date],
+        returnedAt: [String: Date]
+    ) -> Rank {
+        let remaining = chip.remaining ?? .greatestFiniteMagnitude
+        let place = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt)
+        switch place {
+        case .active:
+            let when = activeAt[chip.id]?.timeIntervalSince1970 ?? 0
+            return Rank(band: place.band, a: -when, b: remaining, c: -chip.percent, index: index)
+        case .reminder:
+            let when = returnedAt[chip.id]?.timeIntervalSince1970 ?? 0
+            return Rank(band: place.band, a: remaining, b: -when, c: -chip.percent, index: index)
+        case .working:
+            let session = isSession(chip) ? 0.0 : 1.0
+            return Rank(band: place.band, a: session, b: -chip.percent, c: remaining, index: index)
+        case .full:
+            return Rank(band: place.band, a: remaining, b: 0, c: 0, index: index)
+        case .empty:
+            return Rank(band: place.band, a: remaining, b: 0, c: 0, index: index)
         }
     }
 
