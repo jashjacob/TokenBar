@@ -14,8 +14,6 @@ final class ChipBarView: NSButton {
     }
 
     private var celebratingUntil: Date?
-    private var pacingUntil: Date?
-    private var paceLabel = ""
     private var pulse: CGFloat = 1
     private var pulseTimer: Timer?
     private var suppressClick = false
@@ -24,10 +22,6 @@ final class ChipBarView: NSButton {
 
     var isCelebrating: Bool {
         celebratingUntil.map { $0 > Date() } ?? false
-    }
-
-    var isPacing: Bool {
-        pacingUntil.map { $0 > Date() } ?? false
     }
 
     init(chip: Chip, layoutWidth: CGFloat = 128) {
@@ -77,13 +71,6 @@ final class ChipBarView: NSButton {
         startPulse()
     }
 
-    /// Amber repaint for five seconds. The countdown slot shows `label` (the run-out estimate).
-    func playPace(label: String) {
-        paceLabel = label
-        pacingUntil = Date().addingTimeInterval(5)
-        startPulse()
-    }
-
     private func startPulse() {
         pulseTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] timer in
@@ -91,7 +78,7 @@ final class ChipBarView: NSButton {
                 timer.invalidate()
                 return
             }
-            guard self.isCelebrating || self.isPacing else {
+            guard self.isCelebrating else {
                 timer.invalidate()
                 self.pulseTimer = nil
                 self.needsDisplay = true
@@ -113,30 +100,23 @@ final class ChipBarView: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         let celebrating = isCelebrating
-        let pacing = isPacing && !celebrating
-        let tint: NSColor
-        if celebrating {
-            tint = NSColor(srgbRed: 0.22, green: 0.95, blue: 0.52, alpha: 1)
-        } else if pacing {
-            tint = NSColor(srgbRed: 1.0, green: 0.62, blue: 0.18, alpha: 1)
-        } else {
-            tint = Self.tint(percent: chip.percent)
-        }
+        let tint: NSColor = celebrating
+            ? NSColor(srgbRed: 0.22, green: 0.95, blue: 0.52, alpha: 1)
+            : Self.tint(percent: chip.percent)
         let pad = bounds.insetBy(dx: 5, dy: 3)
 
-        if celebrating || pacing {
+        if celebrating {
             let glow = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
-            let alpha = celebrating ? (0.18 + 0.22 * pulse) : (0.34 + 0.28 * pulse)
-            tint.withAlphaComponent(alpha).setFill()
+            tint.withAlphaComponent(0.18 + 0.22 * pulse).setFill()
             glow.fill()
         }
 
-        if chip.showsStackedFull, !celebrating, !pacing {
+        if chip.showsStackedFull, !celebrating {
             drawStackedFull(in: pad, tint: tint)
             return
         }
-        drawHeader(in: pad, tint: tint, celebrating: celebrating, pacing: pacing)
-        drawBar(in: pad, tint: tint, celebrating: celebrating, pacing: pacing)
+        drawHeader(in: pad, tint: tint, celebrating: celebrating)
+        drawBar(in: pad, tint: tint, celebrating: celebrating)
     }
 
     /// Full card: name and tag on top, the countdown under it. No bar, no 100%.
@@ -185,7 +165,7 @@ final class ChipBarView: NSButton {
         return full
     }
 
-    private func drawHeader(in pad: NSRect, tint: NSColor, celebrating: Bool, pacing: Bool) {
+    private func drawHeader(in pad: NSRect, tint: NSColor, celebrating: Bool) {
         let tag = chip.windowTag.map { $0 as NSString }
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
@@ -196,14 +176,14 @@ final class ChipBarView: NSButton {
             .foregroundColor: tint,
         ]
         let timeAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: celebrating || pacing ? .bold : .medium),
-            .foregroundColor: celebrating || pacing ? tint : NSColor.white.withAlphaComponent(0.92),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: celebrating ? .bold : .medium),
+            .foregroundColor: celebrating ? tint : NSColor.white.withAlphaComponent(0.92),
         ]
 
         let tagSize = tag?.size(withAttributes: tagAttrs) ?? .zero
         let tagReserve: CGFloat = tag == nil ? 0 : tagSize.width + 8
-        let shownTime = celebrating ? "RESET" : (pacing ? paceLabel : chip.countdownText)
-        let shownCompact = celebrating ? "RESET" : (pacing ? paceLabel : chip.compactCountdownText)
+        let shownTime = celebrating ? "RESET" : chip.countdownText
+        let shownCompact = celebrating ? "RESET" : chip.compactCountdownText
         let fullTime = shownTime as NSString
         let compactTime = shownCompact as NSString
         let fullTimeW = fullTime.size(withAttributes: timeAttrs).width
@@ -214,7 +194,7 @@ final class ChipBarView: NSButton {
         let gap: CGFloat = 4
         let time: NSString
         let timeW: CGFloat
-        if celebrating || pacing || pad.width >= tagReserve + gap + fullTimeW + minName {
+        if celebrating || pad.width >= tagReserve + gap + fullTimeW + minName {
             time = fullTime
             timeW = fullTimeW
         } else {
@@ -248,7 +228,7 @@ final class ChipBarView: NSButton {
         time.draw(at: NSPoint(x: pad.maxX - timeW, y: pad.minY + 1), withAttributes: timeAttrs)
     }
 
-    private func drawBar(in pad: NSRect, tint: NSColor, celebrating: Bool, pacing: Bool) {
+    private func drawBar(in pad: NSRect, tint: NSColor, celebrating: Bool) {
         let percentText = (celebrating ? "" : String(format: "%.0f%%", chip.percent)) as NSString
         let percentAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
@@ -278,7 +258,7 @@ final class ChipBarView: NSButton {
             )
         }
 
-        if !celebrating, !pacing, chip.percent >= 5, let pace = chip.paceFraction {
+        if !celebrating, chip.percent >= 5, let pace = chip.paceFraction {
             let tickX = barRect.minX + barRect.width * CGFloat(pace)
             tint.setFill()
             NSBezierPath(rect: NSRect(x: tickX - 0.75, y: barRect.minY - 2.5, width: 1.5, height: barHeight + 5)).fill()

@@ -27,6 +27,13 @@ enum ChipActivity {
         return storedReturned
     }
 
+    /// The last real rise is still inside the hold. A high percent from earlier
+    /// in a long window is not enough: that chip is spent, but it is idle.
+    static func isInUse(_ id: String, now: Date = Date()) -> Bool {
+        ensureLoaded()
+        return fresh(storedActive[id], now: now)
+    }
+
     static func note(_ chips: [Chip], now: Date = Date()) {
         ensureLoaded()
         var changed = false

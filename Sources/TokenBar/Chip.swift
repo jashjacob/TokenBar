@@ -98,11 +98,6 @@ struct Chip: Equatable, Identifiable {
         return eta
     }
 
-    /// Short estimate for the pace flash, such as `44m`.
-    var paceRunoutText: String? {
-        paceRunout.map(Countdown.eta)
-    }
-
     /// "5h", "7d", "wk", "mo" when the label ends with a window tag.
     var windowTag: String? {
         for tag in ["5h", "7d", "wk", "mo"] where label.hasSuffix(tag) {

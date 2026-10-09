@@ -28,7 +28,9 @@ final class TouchBarStripView: NSView {
     private var loggedHidden = -1
 
     override var isFlipped: Bool { true }
-    override var intrinsicContentSize: NSSize { NSSize(width: 680, height: 30) }
+    /// Width comes from the Touch Bar slot. A fixed 680 makes macOS scroll the
+    /// whole bar and draw its own chevron over the system controls.
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 30) }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -96,18 +98,6 @@ final class TouchBarStripView: NSView {
             completion()
         }
         needsLayout = true
-    }
-
-    @discardableResult
-    func playPace(_ labels: [String: String]) -> Bool {
-        var painted = false
-        for (id, label) in labels {
-            guard let view = chipViews[id] else { continue }
-            view.isHidden = false
-            view.playPace(label: label)
-            painted = true
-        }
-        return painted
     }
 
     override func layout() {
@@ -182,22 +172,22 @@ final class TouchBarStripView: NSView {
             cursor += w + spacing
         }
 
-        let trailingW = EdgeHint.width(count: hiddenNames.count, side: .trailing)
+        let moreOnRight = overflow - chipOffset > 12
         trailingHint.count = hiddenNames.count
         trailingHint.names = hiddenNames
         trailingHint.alphaValue = dimmed ? 0.4 : 1
-        trailingHint.isHidden = hiddenNames.isEmpty
+        trailingHint.isHidden = !moreOnRight
         trailingHint.frame = NSRect(
-            x: bounds.width - trailingW,
+            x: bounds.width - EdgeHint.arrowWidth,
             y: 0,
-            width: trailingW,
+            width: EdgeHint.arrowWidth,
             height: height
         )
 
         let canSlideBack = chipOffset > 0.5
         leadingHint.alphaValue = dimmed ? 0.4 : 1
         leadingHint.isHidden = !canSlideBack
-        leadingHint.frame = NSRect(x: chipClip.frame.minX, y: 0, width: EdgeHint.leadingWidth, height: height)
+        leadingHint.frame = NSRect(x: chipClip.frame.minX, y: 0, width: EdgeHint.arrowWidth, height: height)
         addSubview(leadingHint)
         addSubview(trailingHint)
 
@@ -377,7 +367,7 @@ private final class ChipClip: NSView {
 private final class EdgeHint: NSView {
     enum Side { case leading, trailing }
 
-    static let leadingWidth: CGFloat = 18
+    static let arrowWidth: CGFloat = 22
 
     let side: Side
     var count = 0 {
@@ -404,12 +394,6 @@ private final class EdgeHint: NSView {
     /// Touches pass through to the chip underneath so the row still slides.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    static func width(count: Int, side: Side) -> CGFloat {
-        if side == .leading { return leadingWidth }
-        let text = "\(count)›" as NSString
-        return ceil(text.size(withAttributes: Self.textAttrs).width + 16)
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         let from: NSPoint
         let to: NSPoint
@@ -421,15 +405,15 @@ private final class EdgeHint: NSView {
             to = NSPoint(x: bounds.minX, y: bounds.midY)
         }
         let gradient = NSGradient(colors: [
-            NSColor.black.withAlphaComponent(0),
-            NSColor.black.withAlphaComponent(0.78),
+            NSColor.black.withAlphaComponent(0.15),
+            NSColor.black.withAlphaComponent(0.88),
         ])
         gradient?.draw(from: from, to: to, options: [])
 
-        let text = (side == .leading ? "‹" : "\(count)›") as NSString
+        let text = (side == .leading ? "‹" : "›") as NSString
         let size = text.size(withAttributes: Self.textAttrs)
         let rect = NSRect(
-            x: side == .leading ? 1 : bounds.width - size.width - 3,
+            x: side == .leading ? 2 : bounds.width - size.width - 2,
             y: (bounds.height - size.height) / 2,
             width: ceil(size.width),
             height: ceil(size.height)

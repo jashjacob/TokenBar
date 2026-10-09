@@ -148,10 +148,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         pin.state = touchBar.isPinned ? .on : .off
         menu.addItem(pin)
 
-        let preview = NSMenuItem(title: "Preview Banner", action: #selector(previewClicked), keyEquivalent: "")
-        preview.target = self
-        menu.addItem(preview)
-
         let refresh = NSMenuItem(title: "Refresh", action: #selector(refreshClicked), keyEquivalent: "r")
         refresh.target = self
         menu.addItem(refresh)
@@ -198,10 +194,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         ChipPreferences.setAllVisible(allIDs(), false)
         refreshOpenMenu()
         onVisibilityChange()
-    }
-
-    @objc private func previewClicked() {
-        touchBar.previewFlashes()
     }
 
     @objc private func refreshClicked() {
