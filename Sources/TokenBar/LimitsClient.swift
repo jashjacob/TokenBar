@@ -38,7 +38,7 @@ enum LimitsClient {
         }
         chips = await fill(
             chips,
-            ids: ["commandCode.primary_window", "commandCode.secondary_window"],
+            ids: ["commandCode.primary_window", "commandCode.secondary_window", "commandCode.tertiary_window"],
             loader: CommandCodeFallback.chips,
             log: "command code"
         )

@@ -98,6 +98,15 @@ struct Chip: Equatable, Identifiable {
         return eta
     }
 
+    /// A shorter window of a tool whose monthly chip is already full.
+    /// CmdCode wk, OpenCode wk, Kimi 5h, and the same shape on any other tool.
+    static func heldOffStrip(_ id: String, among chips: [Chip]) -> Bool {
+        guard let chip = chips.first(where: { $0.id == id }), let tag = chip.windowTag, tag != "mo" else { return false }
+        return chips.contains { other in
+            other.shortName == chip.shortName && other.windowTag == "mo" && other.showsStackedFull
+        }
+    }
+
     /// "5h", "7d", "wk", "mo" when the label ends with a window tag.
     var windowTag: String? {
         for tag in ["5h", "7d", "wk", "mo"] where label.hasSuffix(tag) {

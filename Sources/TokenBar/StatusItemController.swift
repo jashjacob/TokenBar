@@ -47,7 +47,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                     lines.append(today.costMenuTitle)
                 }
             }
-            lines.append(contentsOf: chips.filter { ChipPreferences.isVisible($0.id) }.map(\.tooltipTitle))
+            lines.append(contentsOf: chips.filter {
+                ChipPreferences.isVisible($0.id) && !Chip.heldOffStrip($0.id, among: chips)
+            }.map(\.tooltipTitle))
             button.toolTip = error ?? (lines.isEmpty ? "TokenBar" : lines.joined(separator: "\n"))
         }
         if menuOpen {
@@ -89,7 +91,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         guard let menu = item.menu else { return }
         for row in menu.items {
             if let id = row.representedObject as? String {
-                row.state = ChipPreferences.isVisible(id) ? .on : .off
+                if let chip = chips.first(where: { $0.id == id }) {
+                    applyChipRow(row, chip)
+                } else {
+                    row.state = ChipPreferences.isVisible(id) ? .on : .off
+                }
             } else if row.title == "Pin Touch Bar" {
                 row.state = touchBar.isPinned ? .on : .off
             }
@@ -130,8 +136,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 let row = NSMenuItem(title: chip.menuTitle, action: #selector(toggleChip(_:)), keyEquivalent: "")
                 row.target = self
                 row.representedObject = chip.id
-                row.state = ChipPreferences.isVisible(chip.id) ? .on : .off
-                row.toolTip = chip.rowTip
+                applyChipRow(row, chip)
                 menu.addItem(row)
             }
             let showAll = NSMenuItem(title: "Show All", action: #selector(showAllClicked), keyEquivalent: "")
@@ -165,6 +170,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         quit.target = self
         menu.addItem(quit)
         return menu
+    }
+
+    private func applyChipRow(_ row: NSMenuItem, _ chip: Chip) {
+        let on = ChipPreferences.isVisible(chip.id)
+        let held = on && Chip.heldOffStrip(chip.id, among: chips)
+        row.state = on ? .on : .off
+        if held {
+            let font = NSFont.menuFont(ofSize: 0)
+            let title = NSMutableAttributedString(string: chip.menuTitle, attributes: [.font: font])
+            title.append(NSAttributedString(string: "  · monthly is full", attributes: [.font: font]))
+            row.attributedTitle = title
+            row.toolTip = "\(chip.rowTip)\nOff the Touch Bar until the monthly window refills."
+        } else {
+            row.attributedTitle = nil
+            row.title = chip.menuTitle
+            row.toolTip = chip.rowTip
+        }
     }
 
     private func disabled(_ title: String) -> NSMenuItem {

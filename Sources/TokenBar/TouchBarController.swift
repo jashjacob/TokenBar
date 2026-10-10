@@ -83,7 +83,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             ChipActivity.note(live)
         }
         let visible = ChipLayout.ordered(
-            live.filter { ChipPreferences.isVisible($0.id) },
+            live.filter { ChipPreferences.isVisible($0.id) && !Chip.heldOffStrip($0.id, among: live) },
             activeAt: ChipActivity.activeAt,
             returnedAt: ChipActivity.returnedAt
         )
