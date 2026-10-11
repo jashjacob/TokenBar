@@ -98,12 +98,58 @@ struct Chip: Equatable, Identifiable {
         return eta
     }
 
-    /// A shorter window of a tool whose monthly chip is already full.
-    /// CmdCode wk, OpenCode wk, Kimi 5h, and the same shape on any other tool.
+    /// A shorter window of a tool whose longer window is already full.
+    /// Monthly holds weekly, 7-day, and 5-hour. Weekly and 7-day hold 5-hour.
+    /// Those two are the same span, so neither holds the other.
     static func heldOffStrip(_ id: String, among chips: [Chip]) -> Bool {
-        guard let chip = chips.first(where: { $0.id == id }), let tag = chip.windowTag, tag != "mo" else { return false }
-        return chips.contains { other in
-            other.shortName == chip.shortName && other.windowTag == "mo" && other.showsStackedFull
+        holdingWindow(id, among: chips) != nil
+    }
+
+    /// "monthly", "weekly", or "7-day" for the menu note. The longest full window wins.
+    static func heldOffReason(_ id: String, among chips: [Chip]) -> String? {
+        switch holdingWindow(id, among: chips)?.windowTag {
+        case "mo": return "monthly"
+        case "wk": return "weekly"
+        case "7d": return "7-day"
+        default: return nil
+        }
+    }
+
+    private static func holdingWindow(_ id: String, among chips: [Chip]) -> Chip? {
+        guard let chip = chips.first(where: { $0.id == id }),
+              let rank = windowSpan(chip.windowTag)
+        else { return nil }
+        return chips
+            .filter { other in
+                guard other.shortName == chip.shortName, other.showsStackedFull,
+                      let otherRank = windowSpan(other.windowTag)
+                else { return false }
+                return otherRank > rank
+            }
+            .max { a, b in
+                let ar = windowSpan(a.windowTag) ?? 0
+                let br = windowSpan(b.windowTag) ?? 0
+                if ar != br { return ar < br }
+                return noteRank(a.windowTag) < noteRank(b.windowTag)
+            }
+    }
+
+    /// Monthly is the long pool. Weekly and 7-day are one week. 5-hour is the short pace window.
+    private static func windowSpan(_ tag: String?) -> Int? {
+        switch tag {
+        case "mo": return 3
+        case "wk", "7d": return 2
+        case "5h": return 1
+        default: return nil
+        }
+    }
+
+    private static func noteRank(_ tag: String?) -> Int {
+        switch tag {
+        case "mo": return 3
+        case "wk": return 2
+        case "7d": return 1
+        default: return 0
         }
     }
 

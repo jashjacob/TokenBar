@@ -174,14 +174,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func applyChipRow(_ row: NSMenuItem, _ chip: Chip) {
         let on = ChipPreferences.isVisible(chip.id)
-        let held = on && Chip.heldOffStrip(chip.id, among: chips)
+        let reason = on ? Chip.heldOffReason(chip.id, among: chips) : nil
         row.state = on ? .on : .off
-        if held {
+        if let reason {
             let font = NSFont.menuFont(ofSize: 0)
             let title = NSMutableAttributedString(string: chip.menuTitle, attributes: [.font: font])
-            title.append(NSAttributedString(string: "  · monthly is full", attributes: [.font: font]))
+            title.append(NSAttributedString(string: "  · \(reason) is full", attributes: [.font: font]))
             row.attributedTitle = title
-            row.toolTip = "\(chip.rowTip)\nOff the Touch Bar until the monthly window refills."
+            row.toolTip = "\(chip.rowTip)\nOff the Touch Bar until the \(reason) window refills."
         } else {
             row.attributedTitle = nil
             row.title = chip.menuTitle
