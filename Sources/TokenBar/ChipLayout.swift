@@ -12,7 +12,9 @@ enum ChipLayout {
 
     /// Left to right among the chips already checked on:
     /// in use, then a full card counting down or a card that just came back,
-    /// then cards that still have some usage, then other full cards, then 0%.
+    /// then any 5-hour chip, then longer cards that still have some usage,
+    /// then other full cards, then an unused longer window.
+    /// A week or a month under 5% is not "in use". A 1% Codex 7d does not sit up front.
     static func ordered(
         _ chips: [Chip],
         now: Date = Date(),
@@ -56,6 +58,7 @@ enum ChipLayout {
     private enum Placement {
         case active
         case reminder
+        case session
         case working
         case full
         case empty
@@ -64,6 +67,7 @@ enum ChipLayout {
             switch self {
             case .active: return "in use"
             case .reminder: return "reminder"
+            case .session: return "5h"
             case .working: return "usage"
             case .full: return "full"
             case .empty: return "empty"
@@ -74,12 +78,16 @@ enum ChipLayout {
             switch self {
             case .active: return 0
             case .reminder: return 1
-            case .working: return 2
-            case .full: return 3
-            case .empty: return 4
+            case .session: return 2
+            case .working: return 3
+            case .full: return 4
+            case .empty: return 5
             }
         }
     }
+
+    /// A week or a month this low is still free. It does not take a front slot.
+    private static let consumedFloor = 5
 
     private static func placement(
         of chip: Chip,
@@ -89,12 +97,16 @@ enum ChipLayout {
     ) -> Placement {
         let full = chip.showsStackedFull
         let empty = Int(chip.percent.rounded()) == 0
-        if fresh(activeAt[chip.id], now: now) { return .active }
+        let session = isSession(chip)
+        let consumed = Int(chip.percent.rounded()) >= consumedFloor
+        if fresh(activeAt[chip.id], now: now), session || consumed { return .active }
         // A full card stays on the left until that window resets. A reset comes
         // forward only when the window was actually spent. An empty one was
         // already free, so its new window is not a reminder.
         if full, chip.remaining != nil { return .reminder }
         if fresh(returnedAt[chip.id], now: now) { return .reminder }
+        // The 5-hour chip is the one to see now, ahead of a month that still has days.
+        if session { return .session }
         if empty { return .empty }
         if full { return .full }
         return .working
@@ -118,7 +130,10 @@ enum ChipLayout {
         switch place {
         case .active:
             let when = activeAt[chip.id]?.timeIntervalSince1970 ?? 0
-            return Rank(band: place.band, a: -when, b: remaining, c: -chip.percent, index: index)
+            let session = isSession(chip) ? 0.0 : 1.0
+            return Rank(band: place.band, a: session, b: -when, c: -chip.percent, index: index)
+        case .session:
+            return Rank(band: place.band, a: remaining, b: 0, c: 0, index: index)
         case .reminder:
             let when = returnedAt[chip.id]?.timeIntervalSince1970 ?? 0
             return Rank(band: place.band, a: remaining, b: -when, c: -chip.percent, index: index)
