@@ -8,7 +8,7 @@ final class StripBotView: NSButton {
     var offline: Bool = false {
         didSet { updateChrome() }
     }
-    var bounceEnabled: Bool = true {
+    var bounceEnabled: Bool = false {
         didSet { syncTimer() }
     }
 

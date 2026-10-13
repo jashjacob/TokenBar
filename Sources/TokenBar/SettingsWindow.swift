@@ -36,7 +36,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         if today != nil { current.formUnion(ChipPreferences.todayMetricIDs) }
         let leftovers = ChipPreferences.hiddenIDs.subtracting(current).sorted()
         general.apply(offline: offline, error: error)
-        touch.apply(bounce: touchBar?.bounceStripBot ?? true, leftovers: leftovers)
+        touch.apply(bounce: touchBar?.bounceStripBot ?? false, leftovers: leftovers)
         sources.apply(fallbacks: ChipPreferences.fallbacksEnabled, tracker: tracker, fallback: fallback)
     }
 

@@ -39,7 +39,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     var bounceStripBot: Bool {
-        get { UserDefaults.standard.object(forKey: "bounceStripBot") as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: "bounceStripBot") as? Bool ?? false }
         set {
             UserDefaults.standard.set(newValue, forKey: "bounceStripBot")
             stripBot?.bounceEnabled = newValue
