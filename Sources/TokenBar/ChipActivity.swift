@@ -8,7 +8,10 @@ enum ChipActivity {
     /// How long a chip stays "in use" after its percent last rose, and how long
     /// a chip that just reset stays up front before it can drift right.
     nonisolated static let hold: TimeInterval = 5 * 3600
+    /// A chip used today stays ahead of one that has not moved in a day.
+    nonisolated static let recent: TimeInterval = 24 * 3600
     /// A rise smaller than this is noise, including a rolling window's creep.
+    /// Slow windows add up across polls, so a long GrokBot session still counts.
     nonisolated static let rise = 0.5
 
     private static let key = "chipActivity.v2"
@@ -16,6 +19,8 @@ enum ChipActivity {
     private static var seen: [String: ChipSnapshot] = [:]
     private static var storedActive: [String: Date] = [:]
     private static var storedReturned: [String: Date] = [:]
+    /// Percent at the last real rise. Smaller steps add up until they cross `rise`.
+    private static var baseline: [String: Double] = [:]
 
     static var activeAt: [String: Date] {
         ensureLoaded()
@@ -31,7 +36,13 @@ enum ChipActivity {
     /// in a long window is not enough: that chip is spent, but it is idle.
     static func isInUse(_ id: String, now: Date = Date()) -> Bool {
         ensureLoaded()
-        return fresh(storedActive[id], now: now)
+        return fresh(storedActive[id], now: now, window: hold)
+    }
+
+    /// Used since yesterday. Ahead of a chip that has not moved in a day.
+    static func isRecent(_ id: String, now: Date = Date()) -> Bool {
+        ensureLoaded()
+        return fresh(storedActive[id], now: now, window: recent)
     }
 
     static func note(_ chips: [Chip], now: Date = Date()) {
@@ -45,23 +56,34 @@ enum ChipActivity {
                 source: chip.source
             )
             defer { seen[chip.id] = snapshot }
-            guard let old = seen[chip.id] else { continue }
-            if old.source != chip.source { continue }
-            if chip.percent - old.percent >= rise {
+            guard let old = seen[chip.id] else {
+                baseline[chip.id] = chip.percent
+                continue
+            }
+            if old.source != chip.source {
+                baseline[chip.id] = chip.percent
+                continue
+            }
+            let base = baseline[chip.id] ?? old.percent
+            if chip.percent - base >= rise {
                 storedActive[chip.id] = now
+                baseline[chip.id] = chip.percent
                 changed = true
+            } else if chip.percent < base {
+                baseline[chip.id] = chip.percent
             }
             // A window that was already empty resetting is not news. The quota
             // was free, and it stays free. Only a window that was actually
             // spent, or one in use right now, comes forward.
             if ResetDetector.didReset(old: old, new: chip),
-               Int(old.percent.rounded()) > 0 || fresh(storedActive[chip.id], now: now) {
+               Int(old.percent.rounded()) > 0 || fresh(storedActive[chip.id], now: now, window: hold) {
                 storedReturned[chip.id] = now
+                baseline[chip.id] = chip.percent
                 changed = true
             }
         }
-        let freshActive = prune(storedActive, now: now)
-        let freshReturned = prune(storedReturned, now: now)
+        let freshActive = prune(storedActive, now: now, window: recent)
+        let freshReturned = prune(storedReturned, now: now, window: hold)
         if freshActive.count != storedActive.count || freshReturned.count != storedReturned.count {
             changed = true
         }
@@ -79,20 +101,20 @@ enum ChipActivity {
             if let stamp = entry["a"] { storedActive[id] = Date(timeIntervalSince1970: stamp) }
             if let stamp = entry["r"] { storedReturned[id] = Date(timeIntervalSince1970: stamp) }
         }
-        storedActive = prune(storedActive, now: Date())
-        storedReturned = prune(storedReturned, now: Date())
+        storedActive = prune(storedActive, now: Date(), window: recent)
+        storedReturned = prune(storedReturned, now: Date(), window: hold)
     }
 
-    private static func fresh(_ stamp: Date?, now: Date) -> Bool {
+    private static func fresh(_ stamp: Date?, now: Date, window: TimeInterval) -> Bool {
         guard let stamp else { return false }
         let age = now.timeIntervalSince(stamp)
-        return age >= 0 && age < hold
+        return age >= 0 && age < window
     }
 
-    private static func prune(_ times: [String: Date], now: Date) -> [String: Date] {
+    private static func prune(_ times: [String: Date], now: Date, window: TimeInterval) -> [String: Date] {
         times.filter { stamp in
             let age = now.timeIntervalSince(stamp.value)
-            return age >= 0 && age < hold
+            return age >= 0 && age < window
         }
     }
 
