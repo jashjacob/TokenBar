@@ -41,6 +41,20 @@ TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in S
 | ChatGPT / Codex | In |
 | Antigravity | In |
 
+## Along the way
+
+Every build is on the [releases page](https://github.com/jashjacob/TokenBar/releases).
+
+```mermaid
+timeline
+    6 Sep : Start
+    13 Sep : One strip
+    23 Sep : Fallbacks
+    7 Oct : Settings
+    9 Oct : Follows what you use
+    14 Oct : Sort by what you used
+```
+
 ## For coding agents
 
 Don’t download the DMG. Don’t clone TokenTracker unless asked.
