@@ -233,9 +233,6 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             )
             defer { snapshots[chip.id] = snapshot }
             guard let old = snapshots[chip.id] else { continue }
-            // A fallback taking over, or TokenTracker coming back, moves resetAt
-            // without the quota actually resetting.
-            if old.source != chip.source { continue }
             let last = lastCelebratedAt[chip.id] ?? .distantPast
             guard Date().timeIntervalSince(last) > 60 else { continue }
             // An unused window resetting does not flash. It was already free.

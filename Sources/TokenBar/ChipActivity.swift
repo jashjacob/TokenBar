@@ -2,7 +2,8 @@ import Foundation
 
 /// Remembers which checked windows are actually being spent, and which ones
 /// just came back from a full window. Times survive a relaunch. A source swap
-/// between TokenTracker and a fallback is not usage and is not a reset.
+/// between TokenTracker and a fallback is not usage. It is a reset only when
+/// the percent fell and the window came back.
 @MainActor
 enum ChipActivity {
     /// How long a chip stays "in use" after its percent last rose, and how long
@@ -61,16 +62,18 @@ enum ChipActivity {
                 continue
             }
             if old.source != chip.source {
+                // The other feed's percent is not a rise. The reset check below
+                // still runs, so a refill that arrives on this poll is kept.
                 baseline[chip.id] = chip.percent
-                continue
-            }
-            let base = baseline[chip.id] ?? old.percent
-            if chip.percent - base >= rise {
-                storedActive[chip.id] = now
-                baseline[chip.id] = chip.percent
-                changed = true
-            } else if chip.percent < base {
-                baseline[chip.id] = chip.percent
+            } else {
+                let base = baseline[chip.id] ?? old.percent
+                if chip.percent - base >= rise {
+                    storedActive[chip.id] = now
+                    baseline[chip.id] = chip.percent
+                    changed = true
+                } else if chip.percent < base {
+                    baseline[chip.id] = chip.percent
+                }
             }
             // A window that was already empty resetting is not news. The quota
             // was free, and it stays free. Only a window that was actually
