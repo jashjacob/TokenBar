@@ -14,6 +14,17 @@ enum LimitsError: LocalizedError {
         case .http(let code): return "TokenTracker HTTP \(code)"
         }
     }
+
+    /// Fallback failures share this error. Name the host that actually answered.
+    static func describe(_ error: Error, host: String) -> String {
+        guard let limits = error as? LimitsError else { return error.localizedDescription }
+        switch limits {
+        case .offline: return "\(host) is not running"
+        case .badPayload: return "\(host) returned unreadable data"
+        case .tooLarge: return "\(host) response was too large"
+        case .http(let code): return "\(host) HTTP \(code)"
+        }
+    }
 }
 
 enum LimitsClient {
@@ -24,9 +35,8 @@ enum LimitsClient {
     /// Missing windows are rechecked on this cadence, not on every TokenTracker poll.
     private static let fallbackTTL: TimeInterval = 5 * 60
     private static var fallbackCache: [String: (at: Date, chips: [Chip])] = [:]
-    static var refreshFallbacksNow = false
 
-    static func fetch() async throws -> [Chip] {
+    static func fetch(bypassFallbackCache: Bool = false) async throws -> [Chip] {
         var chips: [Chip] = []
         var trackerError: Error?
         do {
@@ -40,37 +50,43 @@ enum LimitsClient {
             chips,
             ids: ["commandCode.primary_window", "commandCode.secondary_window", "commandCode.tertiary_window"],
             loader: CommandCodeFallback.chips,
-            log: "command code"
+            log: "command code",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
             ids: ["opencodeGo.primary_window", "opencodeGo.secondary_window", "opencodeGo.tertiary_window"],
             loader: OpenCodeFallback.chips,
-            log: "opencode"
+            log: "opencode",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
             ids: ["grok.primary_window", "grok.secondary_window"],
             loader: GrokFallback.chips,
-            log: "grok"
+            log: "grok",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
             ids: ["cursor.primary_window"],
             loader: CursorFallback.chips,
-            log: "cursor"
+            log: "cursor",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
             ids: ["kimi.primary_window", "kimi.secondary_window"],
             loader: KimiFallback.chips,
-            log: "kimi"
+            log: "kimi",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
             ids: ["codex.primary_window", "codex.secondary_window"],
             loader: CodexFallback.chips,
-            log: "codex"
+            log: "codex",
+            bypassCache: bypassFallbackCache
         )
         chips = await fill(
             chips,
@@ -81,9 +97,9 @@ enum LimitsClient {
                 "antigravity.quaternary_window",
             ],
             loader: AntigravityFallback.chips,
-            log: "antigravity"
+            log: "antigravity",
+            bypassCache: bypassFallbackCache
         )
-        refreshFallbacksNow = false
         if chips.isEmpty, let trackerError {
             throw trackerError
         }
@@ -95,7 +111,8 @@ enum LimitsClient {
         _ chips: [Chip],
         ids: [String],
         loader: () async -> [Chip],
-        log: String
+        log: String,
+        bypassCache: Bool
     ) async -> [Chip] {
         guard ChipPreferences.fallbacksEnabled else { return chips }
         // A window with no reset time cannot show the next countdown. Let the
@@ -106,7 +123,7 @@ enum LimitsClient {
         let extra: [Chip]
         let fetchedAt: Date
         let fetched: Bool
-        if !refreshFallbacksNow,
+        if !bypassCache,
            let cached = fallbackCache[log],
            now.timeIntervalSince(cached.at) < fallbackTTL {
             extra = cached.chips

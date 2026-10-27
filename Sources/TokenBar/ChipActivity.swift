@@ -2,8 +2,8 @@ import Foundation
 
 /// Remembers which checked windows are actually being spent, and which ones
 /// just came back from a full window. Times survive a relaunch. A source swap
-/// between TokenTracker and a fallback is not usage. It is a reset only when
-/// the percent fell and the window came back.
+/// between TokenTracker and a fallback is not usage. A return is remembered
+/// only for a chip on the strip, and only when the percent fell.
 @MainActor
 enum ChipActivity {
     /// How long a chip stays "in use" after its percent last rose, and how long
@@ -46,7 +46,7 @@ enum ChipActivity {
         return fresh(storedActive[id], now: now, window: recent)
     }
 
-    static func note(_ chips: [Chip], now: Date = Date()) {
+    static func note(_ chips: [Chip], onStrip: Set<String>, now: Date = Date()) {
         ensureLoaded()
         var changed = false
         for chip in chips {
@@ -78,7 +78,8 @@ enum ChipActivity {
             // A window that was already empty resetting is not news. The quota
             // was free, and it stays free. Only a window that was actually
             // spent, or one in use right now, comes forward.
-            if ResetDetector.didReset(old: old, new: chip),
+            if onStrip.contains(chip.id),
+               ResetDetector.didReset(old: old, new: chip),
                Int(old.percent.rounded()) > 0 || fresh(storedActive[chip.id], now: now, window: hold) {
                 storedReturned[chip.id] = now
                 baseline[chip.id] = chip.percent

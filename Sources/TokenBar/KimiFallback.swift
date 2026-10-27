@@ -18,7 +18,7 @@ enum KimiFallback {
             do {
                 session = try await refresh(session)
             } catch {
-                Log.line("kimi fallback: \(error.localizedDescription)")
+                Log.line("kimi fallback: \(LimitsError.describe(error, host: "Kimi"))")
                 return []
             }
         }
@@ -51,11 +51,11 @@ enum KimiFallback {
                 let next = try await refresh(session)
                 return try await windows(base: base, bearer: next.accessToken)
             } catch {
-                Log.line("kimi fallback: \(error.localizedDescription)")
+                Log.line("kimi fallback: \(LimitsError.describe(error, host: "Kimi"))")
                 return []
             }
         } catch {
-            Log.line("kimi fallback: \(error.localizedDescription)")
+            Log.line("kimi fallback: \(LimitsError.describe(error, host: "Kimi"))")
             return []
         }
     }

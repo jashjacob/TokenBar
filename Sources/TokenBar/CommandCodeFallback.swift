@@ -26,7 +26,7 @@ enum CommandCodeFallback {
             }
             return chips
         } catch {
-            Log.line("command code fallback: \(error.localizedDescription)")
+            Log.line("command code fallback: \(LimitsError.describe(error, host: "Command Code"))")
             return []
         }
     }

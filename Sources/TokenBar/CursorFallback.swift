@@ -21,7 +21,7 @@ enum CursorFallback {
             }
             return chips
         } catch {
-            Log.line("cursor fallback: \(error.localizedDescription)")
+            Log.line("cursor fallback: \(LimitsError.describe(error, host: "Cursor"))")
             return []
         }
     }

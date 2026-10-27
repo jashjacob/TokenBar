@@ -4,7 +4,7 @@ import AppKit
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let item: NSStatusItem
     private let touchBar: TouchBarController
-    private let onRefresh: () -> Void
+    private let onRefresh: (Bool) -> Void
     private let onVisibilityChange: () -> Void
     private var chips: [Chip] = []
     private var today: TodayUsage?
@@ -15,7 +15,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     init(
         touchBar: TouchBarController,
-        onRefresh: @escaping () -> Void,
+        onRefresh: @escaping (Bool) -> Void,
         onVisibilityChange: @escaping () -> Void
     ) {
         self.item = NSStatusBar.system.statusItem(withLength: 24)
@@ -219,8 +219,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func refreshClicked() {
-        LimitsClient.refreshFallbacksNow = true
-        onRefresh()
+        onRefresh(true)
     }
 
     @objc private func openDashboard() {
@@ -230,7 +229,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func togglePin() {
         touchBar.isPinned.toggle()
         refreshOpenMenu()
-        onRefresh()
+        onRefresh(false)
     }
 
     @objc private func settingsClicked() {

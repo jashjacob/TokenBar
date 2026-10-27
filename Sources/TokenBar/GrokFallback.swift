@@ -25,7 +25,7 @@ enum GrokFallback {
             }
             return chips
         } catch {
-            Log.line("grok fallback: \(error.localizedDescription)")
+            Log.line("grok fallback: \(LimitsError.describe(error, host: "Grok"))")
             return []
         }
     }

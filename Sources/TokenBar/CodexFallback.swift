@@ -15,7 +15,7 @@ enum CodexFallback {
             do {
                 session = try await refresh(session)
             } catch {
-                Log.line("codex fallback: \(error.localizedDescription)")
+                Log.line("codex fallback: \(LimitsError.describe(error, host: "Codex"))")
                 return []
             }
         }
@@ -26,11 +26,11 @@ enum CodexFallback {
                 let next = try await refresh(session)
                 return try await windows(next)
             } catch {
-                Log.line("codex fallback: \(error.localizedDescription)")
+                Log.line("codex fallback: \(LimitsError.describe(error, host: "Codex"))")
                 return []
             }
         } catch {
-            Log.line("codex fallback: \(error.localizedDescription)")
+            Log.line("codex fallback: \(LimitsError.describe(error, host: "Codex"))")
             return []
         }
     }

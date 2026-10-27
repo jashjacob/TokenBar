@@ -14,12 +14,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let sources = SourcesSettingsPane()
     private let about = AboutSettingsPane()
     private var touchBar: TouchBarController?
-    private var onRefresh: () -> Void = {}
+    private var onRefresh: (Bool) -> Void = { _ in }
     private var onVisibilityChange: () -> Void = {}
 
     func configure(
         touchBar: TouchBarController,
-        onRefresh: @escaping () -> Void,
+        onRefresh: @escaping (Bool) -> Void,
         onVisibilityChange: @escaping () -> Void
     ) {
         self.touchBar = touchBar
@@ -68,7 +68,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         general.onPort = { [weak self] port in
             guard port != LimitsClient.discoverPort() else { return }
             LimitsClient.setTrackerPort(port)
-            self?.onRefresh()
+            self?.onRefresh(false)
         }
         touch.onBounce = { [weak self] enabled in
             self?.touchBar?.bounceStripBot = enabled
@@ -80,8 +80,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         sources.onFallbacks = { [weak self] enabled in
             ChipPreferences.fallbacksEnabled = enabled
-            if enabled { LimitsClient.refreshFallbacksNow = true }
-            self?.onRefresh()
+            self?.onRefresh(enabled)
         }
     }
 

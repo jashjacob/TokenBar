@@ -21,7 +21,7 @@ enum OpenCodeFallback {
             }
             return chips
         } catch {
-            Log.line("opencode fallback: \(error.localizedDescription)")
+            Log.line("opencode fallback: \(LimitsError.describe(error, host: "OpenCode"))")
             return []
         }
     }

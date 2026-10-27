@@ -31,7 +31,7 @@ enum AntigravityFallback {
             do {
                 session = try await refresh(session)
             } catch {
-                Log.line("antigravity fallback: \(error.localizedDescription)")
+                Log.line("antigravity fallback: \(LimitsError.describe(error, host: "Antigravity"))")
                 return []
             }
         }
@@ -42,11 +42,11 @@ enum AntigravityFallback {
                 let next = try await refresh(session)
                 return try await fetchWindows(next)
             } catch {
-                Log.line("antigravity fallback: \(error.localizedDescription)")
+                Log.line("antigravity fallback: \(LimitsError.describe(error, host: "Antigravity"))")
                 return []
             }
         } catch {
-            Log.line("antigravity fallback: \(error.localizedDescription)")
+            Log.line("antigravity fallback: \(LimitsError.describe(error, host: "Antigravity"))")
             return []
         }
     }
