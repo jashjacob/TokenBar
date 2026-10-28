@@ -83,6 +83,13 @@ enum LimitsClient {
         )
         chips = await fill(
             chips,
+            ids: ["claude.five_hour", "claude.seven_day"],
+            loader: ClaudeFallback.chips,
+            log: "claude",
+            bypassCache: bypassFallbackCache
+        )
+        chips = await fill(
+            chips,
             ids: ["codex.primary_window", "codex.secondary_window"],
             loader: CodexFallback.chips,
             log: "codex",

@@ -37,7 +37,7 @@ TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in S
 | Grok | In |
 | Cursor | In |
 | Kimi | In |
-| Claude | Not yet |
+| Claude | In |
 | ChatGPT / Codex | In |
 | Antigravity | In |
 

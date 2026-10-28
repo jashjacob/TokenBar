@@ -13,6 +13,7 @@ let package = Package(
             path: "Sources/TokenBar",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("Security"),
                 .linkedFramework("ServiceManagement"),
             ]
         ),
