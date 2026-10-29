@@ -12,6 +12,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var installedStrip = false
     private var presented = false
     private var reassertWork: DispatchWorkItem?
+    /// Bundle of an app opened without activating, so a cold launch does not
+    /// clear the strip before that app is actually up.
+    private var awaitingLaunch: String?
     private var snapshots: [String: ChipSnapshot] = [:]
     private var lastCelebratedAt: [String: Date] = [:]
     private var lastOrder: [String] = []
@@ -58,6 +61,13 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(appLaunched),
+            name: NSWorkspace.didLaunchApplicationNotification,
+            object: nil
+        )
+        watchMenuTracking()
         if isPinned {
             presentExpanded()
         }
@@ -65,6 +75,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
 
     func stop() {
         reassertWork?.cancel()
+        awaitingLaunch = nil
+        DistributedNotificationCenter.default().removeObserver(self)
         PrivateTouchBar.onExternalCollapse = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         if let bar {
@@ -223,13 +235,66 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             Log.line("open \(bundle) failed: app not found")
             return
         }
+        let running = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == bundle && $0.isFinishedLaunching
+        }
         Log.line("open \(bundle)")
         let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
-        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
-            if let error {
-                Log.line("open \(bundle) failed: \(error.localizedDescription)")
+        // Activating a cold launch clears the system-modal strip until that
+        // app is actually frontmost. Leave the current app in front until then.
+        config.activates = running
+        if running {
+            if awaitingLaunch == bundle { awaitingLaunch = nil }
+        } else {
+            awaitingLaunch = bundle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                self?.bringForwardIfStillWaiting(bundle)
             }
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { [weak self] app, error in
+            let failure = error.map(\.localizedDescription)
+            Task { @MainActor in
+                guard let self else { return }
+                if let failure {
+                    Log.line("open \(bundle) failed: \(failure)")
+                    if self.awaitingLaunch == bundle { self.awaitingLaunch = nil }
+                    return
+                }
+                guard self.awaitingLaunch == bundle, let app, app.isFinishedLaunching else { return }
+                self.bringForward(app, bundle: bundle)
+            }
+        }
+    }
+
+    @objc private func appLaunched(_ note: Notification) {
+        guard let awaitingLaunch,
+              let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier == awaitingLaunch else { return }
+        bringForward(app, bundle: awaitingLaunch)
+    }
+
+    /// An app that brings itself forward needs no second activation.
+    private func bringForward(_ app: NSRunningApplication, bundle: String) {
+        guard awaitingLaunch == bundle else { return }
+        awaitingLaunch = nil
+        guard !app.isActive else { return }
+        activate(app)
+    }
+
+    private func bringForwardIfStillWaiting(_ bundle: String) {
+        guard awaitingLaunch == bundle else { return }
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first else {
+            awaitingLaunch = nil
+            return
+        }
+        bringForward(app, bundle: bundle)
+    }
+
+    private func activate(_ app: NSRunningApplication) {
+        if #available(macOS 14.0, *) {
+            app.activate(from: .current, options: [.activateAllWindows])
+        } else {
+            app.activate(options: [.activateIgnoringOtherApps])
         }
     }
 
@@ -249,7 +314,39 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
     }
 
+    /// A Dock menu takes the Touch Bar without activating an app. TokenBar is
+    /// not the active app, so this registration has to be delivered anyway.
+    private func watchMenuTracking() {
+        let center = DistributedNotificationCenter.default()
+        center.addObserver(
+            self,
+            selector: #selector(menuTrackingBegan),
+            name: Notification.Name("com.apple.HIToolbox.beginMenuTrackingNotification"),
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+        center.addObserver(
+            self,
+            selector: #selector(menuTrackingEnded),
+            name: Notification.Name("com.apple.HIToolbox.endMenuTrackingNotification"),
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+    }
+
+    @objc private func menuTrackingBegan() {
+        reassertWork?.cancel()
+    }
+
+    @objc private func menuTrackingEnded() {
+        scheduleReassert()
+    }
+
     @objc private func appActivated(_ note: Notification) {
+        scheduleReassert()
+    }
+
+    private func scheduleReassert() {
         guard isPinned else { return }
         reassertWork?.cancel()
         let work = DispatchWorkItem { [weak self] in

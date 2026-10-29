@@ -13,6 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var refreshTask: Task<Void, Never>?
     private var refreshQueued = false
     private var queuedBypass = false
+    /// Last GrokBot reading TokenTracker actually sent. A null window keeps it for a few minutes.
+    private var grokBotChip: Chip?
+    private var grokBotSeen: Date?
+    private var grokBotHolding = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ChipPreferences.migrateTodaySplit()
@@ -68,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         async let chipsTask = LimitsClient.fetch(bypassFallbackCache: bypassFallbackCache)
         async let todayTask = LimitsClient.fetchToday()
         do {
-            let next = try await chipsTask
+            let next = mergingGrokBot(try await chipsTask)
             chips = next
             offline = false
             lastError = nil
@@ -86,6 +90,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.line("today fetch failed: \(error.localizedDescription)")
         }
         push()
+    }
+
+    private static let grokBotID = "cursor.quaternary_window"
+    private static let grokBotHold: TimeInterval = 5 * 60
+
+    private func mergingGrokBot(_ next: [Chip]) -> [Chip] {
+        if let fresh = next.first(where: { $0.id == Self.grokBotID }) {
+            grokBotChip = fresh
+            grokBotSeen = Date()
+            if grokBotHolding {
+                grokBotHolding = false
+                Log.line("GrokBot is back in the feed")
+            }
+            return next
+        }
+        guard let chip = grokBotChip,
+              let seen = grokBotSeen,
+              Date().timeIntervalSince(seen) < Self.grokBotHold
+        else {
+            if grokBotHolding {
+                grokBotHolding = false
+                grokBotChip = nil
+                grokBotSeen = nil
+                Log.line("dropped held GrokBot")
+            }
+            return next
+        }
+        if !grokBotHolding {
+            grokBotHolding = true
+            Log.line("kept GrokBot, feed omitted it")
+        }
+        return next + [chip]
     }
 
     private func tick() {
