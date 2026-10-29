@@ -24,6 +24,8 @@ final class TouchBarStripView: NSView {
     private var dragOriginOffset: CGFloat = 0
     private var dragPastSlop = false
     private var dragActive = false
+    /// Stays set after the pan ends, so the finger-up that follows a slide is not a tap.
+    private var rowMoved = false
     private var laidOutIDs: [String] = []
     private var loggedHidden = -1
 
@@ -207,12 +209,14 @@ final class TouchBarStripView: NSView {
         dragOriginX = x
         dragOriginOffset = chipOffset
         dragPastSlop = false
+        rowMoved = false
     }
 
     private func dragMoved(to x: CGFloat, chip: ChipBarView?) {
         let dx = x - dragOriginX
         if abs(dx) > 8 {
             dragPastSlop = true
+            rowMoved = true
             chip?.suppressNextClick()
         }
         guard dragPastSlop else { return }
@@ -234,7 +238,7 @@ final class TouchBarStripView: NSView {
                 dragActive = false
             }
         } else {
-            let open = !dragPastSlop
+            let open = !dragPastSlop && !rowMoved
             dragPastSlop = false
             dragActive = false
             if open, let chip {
@@ -276,7 +280,6 @@ final class TouchBarStripView: NSView {
             }
             dragMoved(to: x, chip: hit)
         default:
-            dragPastSlop = false
             dragActive = false
         }
     }
