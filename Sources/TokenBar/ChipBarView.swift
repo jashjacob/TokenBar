@@ -51,6 +51,7 @@ final class ChipBarView: NSButton {
     }
 
     override func touchesBegan(with event: NSEvent) {
+        suppressNextClick()
         onStripTouch?(event, 0)
     }
 
