@@ -3,7 +3,7 @@ import AppKit
 /// One Touch Bar item that owns Today + every selected chip and lays them
 /// out from the real item width, so macOS cannot hide the last card.
 final class TouchBarStripView: NSView {
-    var onChipTap: (() -> Void)?
+    var onChipTap: ((String) -> Void)?
     var onTodayTap: (() -> Void)?
 
     private var chips: [Chip] = []
@@ -228,8 +228,13 @@ final class TouchBarStripView: NSView {
         } else if phase == 1 {
             dragMoved(to: x, chip: chip)
         } else {
+            let tapped = chip.flatMap { dragPastSlop ? nil : $0 }
             dragPastSlop = false
             dragActive = false
+            if let tapped {
+                tapped.suppressNextClick()
+                onChipTap?(tapped.chip.id)
+            }
         }
     }
 
@@ -315,7 +320,7 @@ final class TouchBarStripView: NSView {
                 let view = ChipBarView(chip: chip, layoutWidth: ChipLayout.contentWidth(for: chip))
                 view.alphaValue = dimmed ? 0.4 : 1
                 view.target = self
-                view.action = #selector(chipTapped)
+                view.action = #selector(chipTapped(_:))
                 view.onStripTouch = { [weak self, weak view] event, phase in
                     guard let self, let view else { return }
                     self.handleTouch(event, in: view, phase: phase, chip: view)
@@ -330,7 +335,9 @@ final class TouchBarStripView: NSView {
         }
     }
 
-    @objc private func chipTapped() { onChipTap?() }
+    @objc private func chipTapped(_ sender: ChipBarView) {
+        onChipTap?(sender.chip.id)
+    }
     @objc private func todayTapped() { onTodayTap?() }
 }
 

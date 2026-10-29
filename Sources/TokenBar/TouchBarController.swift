@@ -157,7 +157,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         guard identifier == Self.mainStripID else { return nil }
         let item = NSCustomTouchBarItem(identifier: identifier)
         let view = TouchBarStripView(frame: NSRect(x: 0, y: 0, width: 680, height: 30))
-        view.onChipTap = { [weak self] in self?.chipClicked() }
+        view.onChipTap = { [weak self] id in self?.chipClicked(id) }
         view.onTodayTap = { [weak self] in self?.todayClicked() }
         let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
@@ -194,8 +194,43 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         onCollapsed?()
     }
 
-    @objc private func chipClicked() {
-        openTracker(LimitsClient.dashboardURL())
+    private func chipClicked(_ id: String) {
+        guard let bundle = Self.appBundle(for: id) else {
+            Log.line("open \(id): no app")
+            return
+        }
+        openApp(bundle)
+    }
+
+    /// GrokBot is a Cursor window, and it opens the Grok Bot app.
+    private static func appBundle(for id: String) -> String? {
+        if id == "cursor.quaternary_window" { return "com.anysphere.sand" }
+        switch id.split(separator: ".").first.map(String.init) {
+        case "claude": return "com.anthropic.claudefordesktop"
+        case "codex": return "com.openai.codex"
+        case "cursor": return "com.todesktop.230313mzl4w4u92"
+        case "gemini": return "com.google.GeminiMacOS"
+        case "kimi": return "com.kimi.code.desktop"
+        case "antigravity": return "com.google.antigravity"
+        case "opencodeGo": return "ai.opencode.desktop"
+        case "commandCode": return "ai.commandcode.desktop"
+        default: return nil
+        }
+    }
+
+    private func openApp(_ bundle: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else {
+            Log.line("open \(bundle) failed: app not found")
+            return
+        }
+        Log.line("open \(bundle)")
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
+            if let error {
+                Log.line("open \(bundle) failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     @objc private func todayClicked() {
