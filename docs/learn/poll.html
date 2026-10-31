@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TokenBar — one poll, followed</title>
+<style>
+  :root {
+    --bg: #090c0a;
+    --panel: #121714;
+    --ink: #f3f6f3;
+    --muted: #93a197;
+    --line: rgba(243, 246, 243, .16);
+    --green: #3ddc84;
+    --green-dim: rgba(61, 220, 132, .14);
+    --card: #1a211c;
+    --amber: #e6b15c;
+    --red: #ff5d55;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 8% -10%, rgba(61, 220, 132, .16), transparent 55%),
+      var(--bg);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .page { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+  header h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -0.03em; font-weight: 650; }
+  header p { margin: 0; max-width: 70ch; color: var(--muted); }
+  a { color: var(--green); }
+  .when, .cast, .step, .draw {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-top: 16px;
+  }
+  .when { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  h2 { margin: 28px 0 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 650; }
+  h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -0.02em; }
+  .fn { color: var(--green); font-size: 13px; font-weight: 650; }
+  .muted { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .box { background: var(--card); border-radius: 14px; padding: 12px 14px; }
+  .box strong { display: block; margin-bottom: 6px; }
+  .box.bad { outline: 1px solid rgba(255, 93, 85, .35); }
+  .box.good { outline: 1px solid rgba(61, 220, 132, .28); }
+  .num { font-variant-numeric: tabular-nums; }
+  .chip {
+    display: inline-grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 6px 8px;
+    align-items: center;
+    background: #0c0f0c;
+    border-radius: 8px;
+    padding: 7px 8px 8px;
+    min-width: 168px;
+    margin-top: 8px;
+  }
+  .chip b { font-size: 12px; }
+  .chip .tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green);
+    background: rgba(61, 220, 132, .18);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+  .chip .time { justify-self: end; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .meter { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
+  .chip .bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,.16);
+    position: relative;
+  }
+  .chip .bar i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 42%;
+    background: var(--green);
+    border-radius: 2px;
+  }
+  .chip .pct { color: var(--green); font-size: 11px; font-weight: 700; }
+  .chip.dim { opacity: .45; }
+  .chip.old .bar i { width: 41%; }
+  .strip { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .mini {
+    background: #0c0f0c;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .mini span { display: block; color: var(--muted); font-size: 11px; }
+  .skip { color: var(--amber); }
+  @media (max-width: 800px) {
+    .when, .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>One poll, followed</h1>
+    <p>A made-up 30-second poll at 12:00 UTC. The functions are the real ones. We follow Codex 5h. Three other chips are here so the order has neighbors. <a href="flow.html#poll">Back to the events</a>.</p>
+  </header>
+
+  <section class="when">
+    <div>
+      <h3>This moment</h3>
+      <p class="muted">Now is 12:00:00. The previous poll landed at 11:59:30 and is still the memory.</p>
+      <p class="num">Codex 5h was <b>41%</b>, reset <b>16:00:00</b>, source TokenTracker. A rise at 10:00 still counts as in use. The baseline is 41. The menu checkmark is on.</p>
+    </div>
+    <div>
+      <h3>The other three</h3>
+      <table>
+        <tr><th>Chip</th><th>Now</th><th>Last rise</th></tr>
+        <tr><td>Codex 7d</td><td class="num">22% · 5d2h</td><td>20 hours ago</td></tr>
+        <tr><td>Grok 7d</td><td class="num">68% · 3d</td><td>30 hours ago</td></tr>
+        <tr><td>Gm 5h</td><td class="num">0% · 4h50m</td><td>none remembered</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <h2>The feed arrives</h2>
+  <article class="step">
+    <p class="fn">LimitsClient.fetch → ChipParser.parse</p>
+    <p>TokenTracker sends Codex 5h at <b>42%</b>. The reset stamp moved from 16:00:00 to <b>16:01:00</b>. That is the rolling window sliding a minute, not a new window.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>Fetch succeeds</strong>
+        <p class="num">42% · reset 16:01:00 · 4h1m left<br>source TokenTracker</p>
+        <p class="muted">The log line is the fetch order, countdown included.</p>
+        <p class="num">fetched 4 chips: Gm 5h 4h50m | Grok 7d 3d | Codex 7d 5d2h | Codex 5h 4h1m</p>
+      </div>
+      <div class="box bad">
+        <strong>Fetch throws</strong>
+        <p><code>fetch failed: TokenTracker is not running</code></p>
+        <p>The chip array is left alone, so Codex 5h stays <span class="num">41% · reset 16:00:00 · 4h</span>. <code>offline</code> becomes true. Today is a separate request and can still succeed. In this walk it does not.</p>
+      </div>
+    </div>
+  </article>
+
+  <h2>The clock</h2>
+  <article class="step">
+    <p class="fn">Chip.withClock</p>
+    <p>Display only. The reset is still in the future, so the function returns the same chip. Activity and the refill check keep using the server chip either way.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>Shown clock</strong>
+        <p class="num">42% · 4h1m · reset 16:01</p>
+        <p class="muted">Same numbers as the server chip.</p>
+      </div>
+      <div class="box bad">
+        <strong>Shown clock</strong>
+        <p class="num">41% · 4h · reset 16:00</p>
+        <p class="muted">withClock still runs. It runs on the previous chip.</p>
+      </div>
+    </div>
+  </article>
+
+  <h2>Does it reach the strip?</h2>
+  <article class="step">
+    <p class="fn">ChipPreferences.isVisible · Chip.heldOffStrip</p>
+    <p>The checkmark is on. A longer full window of the same name would hold the 5h chip off. Codex 7d is at 22%, so it holds nothing. Codex 5h stays on the strip in both outcomes.</p>
+    <div class="cols">
+      <div class="box good"><strong>On the strip</strong><p>Checked on. Not held. The menu checkmark stays a checkmark either way.</p></div>
+      <div class="box bad"><strong>On the strip</strong><p>Same decision, made from the chips already in memory.</p></div>
+    </div>
+  </article>
+
+  <h2>The rise</h2>
+  <article class="step">
+    <p class="fn">ChipActivity.note</p>
+    <p>The baseline is 41 and the server percent is 42. One point is more than the half-point rise, so the in-use clock moves from 10:00 to 12:00. A source swap would not count. This poll did not swap.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>Noted</strong>
+        <p class="num">42 − 41 = 1.0 ≥ 0.5</p>
+        <p>activeAt for Codex 5h becomes 12:00. The baseline becomes 42.</p>
+      </div>
+      <div class="box bad">
+        <strong class="skip">Does not run</strong>
+        <p><code>offline</code> skips <code>note</code>. The rise to 42 never happened, so activeAt stays 10:00 and the baseline stays 41.</p>
+      </div>
+    </div>
+  </article>
+
+  <h2>The minute slide</h2>
+  <article class="step">
+    <p class="fn">ResetDetector.didReset</p>
+    <p>Compared on the server chip, and only if the chip is on the strip. The previous snapshot still says 41% and 4h 0m 30s left. This poll says 42% and 4h 1m left. The reset stamp moved 60 seconds.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>Not a refill</strong>
+        <p>The percent went up, so the “percent fell” clauses do not fire. Sixty seconds is under the 90-second bar. Remaining grew by 30 seconds, not by 15 minutes. No green RESET, no haptic.</p>
+      </div>
+      <div class="box bad">
+        <strong class="skip">Does not run</strong>
+        <p><code>detectResets</code> is skipped while offline. The old snapshot stays. Nothing is celebrated.</p>
+      </div>
+    </div>
+  </article>
+
+  <h2>Where it sits</h2>
+  <article class="step">
+    <p class="fn">ChipLayout.ordered</p>
+    <p>The rise at 12:00 is inside the 5-hour hold, so Codex 5h is in use and leads. The menu keeps the fetch order and does not use this sort.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>Strip, left to right</strong>
+        <div class="strip">
+          <div class="mini">Codex 5h<span>in use</span></div>
+          <div class="mini">Codex 7d<span>today</span></div>
+          <div class="mini">Grok 7d<span>usage</span></div>
+          <div class="mini">Gm 5h<span>empty</span></div>
+        </div>
+        <p class="muted">Codex 7d’s rise is 20 hours old, so it is today. Grok 7d’s rise is 30 hours old and it still has a percent, so it is usage. Gm 5h rounds to 0 and has no rise, so it is empty.</p>
+      </div>
+      <div class="box bad">
+        <strong>Same order, old numbers</strong>
+        <p>ordered still runs, on the previous chips. Codex 5h was already in use from the 10:00 rise, so the bands do not move. The strip-order log line is written only when that order changes, so it stays quiet.</p>
+      </div>
+    </div>
+    <p class="muted">Menu order, both outcomes: Gm 5h, Grok 7d, Codex 7d, Codex 5h.</p>
+  </article>
+
+  <h2>What the chip draws</h2>
+  <article class="draw">
+    <p class="fn">ChipBarView</p>
+    <p>42 and 41 are both under 60, so the bar is green. The name is Codex, the tag is 5h, and the time is the countdown. The percent sits on the bar.</p>
+    <div class="cols">
+      <div class="box good">
+        <strong>This poll</strong>
+        <div class="chip">
+          <b>Codex</b><span class="tag">5h</span><span class="time">4h1m</span>
+          <span class="meter"><span class="bar"><i></i></span><span class="pct">42%</span></span>
+        </div>
+      </div>
+      <div class="box bad">
+        <strong>Dimmed, previous chip</strong>
+        <div class="chip dim old">
+          <b>Codex</b><span class="tag">5h</span><span class="time">4h</span>
+          <span class="meter"><span class="bar"><i></i></span><span class="pct">41%</span></span>
+        </div>
+        <p class="muted">The row dims because offline is true. The 1-second timer will keep rolling this same 16:00 clock. It will not invent the 42%.</p>
+      </div>
+    </div>
+  </article>
+</div>
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TokenBar — which event calls what</title>
+<style>
+  :root {
+    --bg: #090c0a;
+    --panel: #121714;
+    --ink: #f3f6f3;
+    --muted: #93a197;
+    --line: rgba(243, 246, 243, .16);
+    --green: #3ddc84;
+    --green-dim: rgba(61, 220, 132, .14);
+    --card: #1a211c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 8% -10%, rgba(61, 220, 132, .16), transparent 55%),
+      var(--bg);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .page { max-width: 1180px; margin: 0 auto; padding: 32px 24px 72px; }
+  header h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -0.03em; font-weight: 650; }
+  header p { margin: 0; max-width: 68ch; color: var(--muted); }
+  header a { color: var(--green); }
+  .stage {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) 320px;
+    gap: 18px;
+    align-items: start;
+    margin-top: 26px;
+  }
+  .events, .chain-card, aside {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+  .events { padding: 12px; }
+  .group { margin: 14px 8px 6px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .event {
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: grid;
+    gap: 2px;
+  }
+  .event:hover { background: rgba(255,255,255,.03); }
+  .event.on { background: var(--green-dim); border-color: rgba(61, 220, 132, .45); }
+  .event .kind { color: var(--green); font-size: 12px; font-weight: 650; }
+  .event.on .kind { color: var(--green); }
+  .event .name { font-weight: 600; }
+  .chain-card { padding: 18px 18px 22px; }
+  .banner { margin-bottom: 8px; }
+  .banner .kind {
+    display: inline-block;
+    color: #06210f;
+    background: var(--green);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .banner h2 { margin: 10px 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+  .banner p { margin: 0; color: var(--muted); }
+  .via {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 4px 8px;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .via i {
+    width: 1px;
+    height: 18px;
+    background: var(--green);
+    display: block;
+  }
+  .branch { margin: 0 0 0 16px; padding-left: 12px; border-left: 1px solid rgba(61, 220, 132, .35); }
+  .row { display: flex; flex-wrap: nowrap; gap: 16px; align-items: flex-start; }
+  .chain-card { overflow-x: auto; }
+  .node {
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 9px 12px;
+    cursor: pointer;
+    display: grid;
+    gap: 2px;
+    min-width: 180px;
+  }
+  .node:hover { border-color: rgba(61, 220, 132, .55); }
+  .node.on { border-color: var(--green); background: var(--green-dim); }
+  .node .fn { font-weight: 700; }
+  .node .file { color: var(--muted); font-size: 12px; }
+  aside { position: sticky; top: 16px; padding: 20px; }
+  aside h2 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+  aside .file { margin: 0 0 12px; color: var(--green); font-size: 13px; }
+  aside .call { margin: 0 0 12px; font-weight: 650; }
+  aside .about { margin: 0; color: var(--ink); }
+  aside h3 {
+    margin: 18px 0 8px;
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .rel { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rel button, .note button {
+    font: inherit;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .note { margin-top: 16px; color: var(--muted); }
+  .note p { margin: 0 0 8px; }
+  @media (max-width: 980px) {
+    .stage { grid-template-columns: 1fr; }
+    aside { position: static; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Which event calls what</h1>
+    <p>Pick an event on the left. The middle is only the functions that event runs, top to bottom. The green line is the call, and the words on it say who calls whom. <a href="poll.html">Follow one poll’s numbers</a>.</p>
+  </header>
+  <div class="stage">
+    <nav class="events" id="events"></nav>
+    <div class="chain-card" id="chain"></div>
+    <aside id="detail"></aside>
+  </div>
+</div>
+<script>
+const nodes = {
+  main: ["AppMain.main", "AppMain.swift", "Starts the process as a menu-bar app and sets AppDelegate. The --once flag prints quotas and exits. The running app does not use it."],
+  launch: ["applicationDidFinishLaunching", "AppDelegate.swift", "Builds the status menu, presents the Touch Bar, fetches once, and starts the two timers. The timers fire later, as their own events."],
+  start: ["TouchBarController.start", "TouchBarController.swift", "Installs the Control Strip mascot, presents the expanded row, and starts listening for app switches, finished launches, and menus."],
+  present: ["presentExpanded", "TouchBarController.swift", "Calls PrivateTouchBar.present. That private Control Strip call keeps the row up while TokenBar is in the background."],
+  refreshNow: ["refreshNow", "AppDelegate.swift", "Runs one fetch at a time. If a fetch is already in flight, the new request waits and collapses into a single follow-up. Refresh, or turning fallbacks on, skips the 5-minute fallback cache."],
+  runRefresh: ["runRefresh", "AppDelegate.swift", "Starts the chip fetch and today’s spend together. Holds GrokBot if the feed dropped it, then pushes both results. If the chip fetch throws, the previous chips stay and offline is set."],
+  fetch: ["LimitsClient.fetch", "LimitsClient.swift", "Reads TokenTracker on 127.0.0.1, then gives each tool a chance to fill a missing window. If the list is still empty, the error is thrown and the previous chips are kept."],
+  parse: ["ChipParser.parse", "ChipParser.swift", "Turns the TokenTracker JSON into Chip values. This is the only parse of that feed."],
+  fill: ["fill", "LimitsClient.swift", "Called once per tool, in order: Command Code, OpenCode, Grok, Cursor, Kimi, Claude, Codex, Antigravity. A tool runs only when one of its required windows has no reset time. Claude’s triggers are the 5-hour and 7-day windows. Opus is not a trigger."],
+  fetchToday: ["LimitsClient.fetchToday", "LimitsClient.swift", "Separate request for today’s token count and cost. It does not change the chip list."],
+  hold: ["mergingGrokBot", "AppDelegate.swift", "On a successful fetch, remembers GrokBot. If the feed omits it and that memory is under five minutes, the last chip is appended. A failed fetch never reaches this."],
+  push: ["push", "AppDelegate.swift", "Hands the same chip array to the Touch Bar and the menu. A menu checkmark calls push again and does not fetch."],
+  update: ["TouchBarController.update", "TouchBarController.swift", "Rolls clocks for display, drops hidden and held chips, notes activity from the server chips, sorts, looks for refills and pace, then draws. Offline skips the note and the refill check."],
+  menu: ["StatusItemController.update", "StatusItemController.swift", "Rebuilds the status menu in fetch order. The menu never sorts."],
+  withClock: ["Chip.withClock", "Chip.swift", "Display only. When a reset time has passed, the countdown rolls forward by the window length. Activity and refill detection compare the server chip."],
+  shown: ["isVisible and heldOffStrip", "ChipPreferences.swift and Chip.swift", "A chip reaches the strip when its menu checkmark is on and a longer full window of the same name is not holding it off."],
+  note: ["ChipActivity.note", "ChipActivity.swift", "Compares this poll’s server chip with the last one. A rise of at least half a point moves the activity clock. A real refill can stamp returnedAt when the chip is on the strip."],
+  ordered: ["ChipLayout.ordered", "ChipLayout.swift", "Sorts only the chips that survived the filter. Bands from the left: in use, reminder, today, usage, full, empty. Today’s spend stays pinned and is not in this list."],
+  detectResets: ["detectResets", "TouchBarController.swift", "Compares the server chip with the previous snapshot. A chip that is off the strip does not flash. The first time a chip is seen, it stays quiet."],
+  didReset: ["ResetDetector.didReset", "ResetDetector.swift", "Decides whether this poll is a refill. A one or two minute slide of a rolling window is not a refill. The green flash also needs the old percent above zero, and a 60-second cooldown."],
+  celebrate: ["celebrate", "TouchBarController.swift", "Plays the green RESET flash and bounces the mascot. update calls it only for a chip that is on the strip."],
+  detectPace: ["detectPaceFlashes", "TouchBarController.swift", "Asks PaceBanner which single in-use chip, if any, should speak. The same window speaks again only when the estimate gets shorter."],
+  flashPace: ["flashPace", "TouchBarController.swift", "Builds the sentence and asks the strip to cover itself with it. A haptic fires once per sentence."],
+  banner: ["presentBanner", "TouchBarController.swift", "Shows the sentence on the strip. If the strip is not up yet, it retries briefly, then gives up without burning the line."],
+  showBanner: ["TouchBarStripView.showBanner", "TouchBarStripView.swift", "Draws the full-width line over the chips, then returns to the row."],
+  apply: ["TouchBarStripView.apply", "TouchBarStripView.swift", "Rebuilds the visible row. Today stays pinned. The chip row is the part that scrolls."],
+  draw: ["ChipBarView", "ChipBarView.swift", "Draws one chip: name, percent, countdown, and the green, amber, or red bar."],
+  tick: ["tick", "TouchBarController.swift", "Rolls each visible chip’s clock and asks the strip to redraw the countdown. No network and no reorder."],
+  stripTick: ["TouchBarStripView.tick", "TouchBarStripView.swift", "Updates the labels already on the bar. The chip row keeps its scroll position."],
+  chipClicked: ["chipClicked", "TouchBarController.swift", "Maps the chip id to that tool’s Mac app and opens it. Grok 7d has no Mac app on this machine, and the tap logs that and stops."],
+  openApp: ["openApp", "TouchBarController.swift", "An app that is already running comes forward now. A closed app launches in the background so the strip stays up."],
+  bringForward: ["bringForward", "TouchBarController.swift", "Activates the app that just finished launching. If that app already brought itself forward, this does nothing."],
+  drag: ["dragMoved", "TouchBarStripView.swift", "Moves the chip row sideways. Today does not move. A slide is not a tap, including the lift at the end of it."],
+  todayClicked: ["todayClicked", "TouchBarController.swift", "The Today chip opens TokenTracker in the browser. Quota chips do not."],
+  openTracker: ["openTracker", "TouchBarController.swift", "Activates this app and opens the TokenTracker page for the configured port."],
+  reassert: ["scheduleReassert", "TouchBarController.swift", "Waits a fifth of a second, then presents the strip again. The wait lets the other app or the menu finish taking the bar first. The pin has to be on."],
+  began: ["menuTrackingBegan", "TouchBarController.swift", "Cancels a pending put-back so the strip does not return while the menu still holds the Touch Bar. It calls no other function."],
+  collapsed: ["noteCollapsedBySystem", "TouchBarController.swift", "The system collapsed this strip through the hooked minimize or dismiss. The pin turns off. A later app switch will not put the row back until you pin it again."]
+};
+
+const events = [
+  {
+    id: "boot", group: "Startup", kind: "Once", title: "Process starts",
+    blurb: "macOS opens TokenBar. This happens before any timer.",
+    root: { id: "main", children: [{ id: "launch", via: "calls" }] }
+  },
+  {
+    id: "launch", group: "Startup", kind: "Once", title: "Launch finishes",
+    blurb: "The menu is built, the strip goes up, and the first fetch starts. The two timers are only scheduled here.",
+    note: "Those timers fire on their own. They are the next two events.",
+    jumps: ["poll", "tick"],
+    root: { id: "launch", children: [
+      { parallel: [
+        { id: "start", children: [{ id: "present", via: "calls" }] },
+        { id: "refreshNow", children: [{ id: "runRefresh", via: "calls" }] }
+      ], via: "calls both" }
+    ]}
+  },
+  {
+    id: "poll", group: "Timers", kind: "Every 30 seconds", title: "Poll timer fires",
+    blurb: "The repeating timer calls refreshNow. No finger is involved. The first launch calls this same chain once.",
+    root: { id: "refreshNow", children: [
+      { id: "runRefresh", via: "calls", children: [
+        { parallel: [
+          { id: "fetch", children: [
+            { id: "parse", via: "calls" },
+            { id: "fill", via: "then calls" }
+          ]},
+          { id: "fetchToday" }
+        ], via: "calls both, at the same time" },
+        { id: "hold", via: "when the chip fetch returns, calls" },
+        { id: "push", via: "then calls", children: [
+          { id: "update", via: "calls" },
+          { id: "menu", via: "and calls" }
+        ]}
+      ]}
+    ]}
+  },
+  {
+    id: "tick", group: "Timers", kind: "Every 1 second", title: "Clock timer fires",
+    blurb: "Moves the countdowns already on the strip. It does not fetch, sort, or rebuild the menu.",
+    root: { id: "tick", children: [
+      { id: "withClock", via: "calls" },
+      { id: "stripTick", via: "then calls" }
+    ]}
+  },
+  {
+    id: "strip", group: "During a poll", kind: "When update runs", title: "The strip is laid out",
+    blurb: "push has the chips. update calls these in order. The menu update beside it does not sort.",
+    root: { id: "update", children: [
+      { id: "withClock", via: "calls" },
+      { id: "shown", via: "then calls" },
+      { id: "note", via: "then calls" },
+      { id: "ordered", via: "then calls" },
+      { id: "detectResets", via: "then calls", children: [
+        { id: "didReset", via: "calls" }
+      ]},
+      { id: "detectPace", via: "then calls" },
+      { id: "apply", via: "then calls", children: [
+        { id: "draw", via: "calls" }
+      ]},
+      { id: "celebrate", via: "if a chip on the strip refilled, calls" },
+      { id: "flashPace", via: "if a pace sentence is due, calls", children: [
+        { id: "banner", via: "calls", children: [
+          { id: "showBanner", via: "calls" }
+        ]}
+      ]}
+    ]}
+  },
+  {
+    id: "lift", group: "Finger", kind: "Still lift", title: "A chip is tapped",
+    blurb: "The finger went down and came up without sliding past 8 points. A slide does not take this path.",
+    root: { id: "chipClicked", children: [
+      { id: "openApp", via: "calls", children: [
+        { id: "bringForward", via: "if the app was closed, calls later" }
+      ]}
+    ]}
+  },
+  {
+    id: "slide", group: "Finger", kind: "Drag", title: "The row is scrolled",
+    blurb: "The finger moved past 8 points. The lift at the end still does not open an app.",
+    root: { id: "drag" }
+  },
+  {
+    id: "today", group: "Finger", kind: "Still lift", title: "Today is tapped",
+    blurb: "Today is not a quota chip. This is the path that opens TokenTracker.",
+    root: { id: "todayClicked", children: [
+      { id: "openTracker", via: "calls" }
+    ]}
+  },
+  {
+    id: "ready", group: "Finger", kind: "When a closed app is up", title: "The opened app finishes launching",
+    blurb: "The tap already launched it in the background. didLaunchApplicationNotification now brings it forward.",
+    root: { id: "bringForward" }
+  },
+  {
+    id: "front", group: "System", kind: "App switch", title: "Another app comes front",
+    blurb: "didActivateApplicationNotification. The strip was taken. TokenBar waits, then presents it again.",
+    root: { id: "reassert", children: [
+      { id: "present", via: "calls, after 0.2s" }
+    ]}
+  },
+  {
+    id: "menuOpen", group: "System", kind: "Menu opens", title: "A Dock menu opens",
+    blurb: "beginMenuTrackingNotification. macOS has the Touch Bar for the menu. This cancels a put-back that was already waiting.",
+    root: { id: "began" }
+  },
+  {
+    id: "menuClose", group: "System", kind: "Menu closes", title: "A Dock menu closes",
+    blurb: "endMenuTrackingNotification. The same put-back as an app switch. The pin has to still be on.",
+    root: { id: "reassert", children: [
+      { id: "present", via: "calls, after 0.2s" }
+    ]}
+  },
+  {
+    id: "collapse", group: "System", kind: "Strip collapses", title: "The system puts the strip away",
+    blurb: "The hooked minimize or dismiss ran inside TokenBar. This is the path that turns the pin off.",
+    root: { id: "collapsed" }
+  }
+];
+
+const eventById = Object.fromEntries(events.map(event => [event.id, event]));
+const eventsNav = document.getElementById("events");
+const chain = document.getElementById("chain");
+const detail = document.getElementById("detail");
+let current = "poll";
+let selected = "refreshNow";
+
+function walk(node, visit) {
+  if (!node) return;
+  if (node.parallel) node.parallel.forEach(child => walk(child, visit));
+  if (node.id) visit(node);
+  (node.children || []).forEach(child => walk(child, visit));
+}
+
+function eventsFor(id) {
+  return events.filter(event => {
+    let found = false;
+    walk(event.root, node => { if (node.id === id) found = true; });
+    return found;
+  });
+}
+
+function renderNode(id) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "node" + (id === selected ? " on" : "");
+  button.dataset.id = id;
+  const fn = document.createElement("span");
+  fn.className = "fn";
+  fn.textContent = nodes[id][0];
+  const file = document.createElement("span");
+  file.className = "file";
+  file.textContent = nodes[id][1];
+  button.append(fn, file);
+  button.addEventListener("click", () => select(id));
+  return button;
+}
+
+function renderVia(text) {
+  const line = document.createElement("div");
+  line.className = "via";
+  const mark = document.createElement("i");
+  const label = document.createElement("span");
+  label.textContent = text;
+  line.append(mark, label);
+  return line;
+}
+
+function renderBranch(node, host) {
+  if (node.via) host.appendChild(renderVia(node.via));
+  if (node.parallel) {
+    const row = document.createElement("div");
+    row.className = "row";
+    node.parallel.forEach(child => {
+      const column = document.createElement("div");
+      renderBranch(child, column);
+      row.appendChild(column);
+    });
+    host.appendChild(row);
+    return;
+  }
+  host.appendChild(renderNode(node.id));
+  if (!node.children) return;
+  const branch = document.createElement("div");
+  branch.className = "branch";
+  node.children.forEach(child => renderBranch(child, branch));
+  host.appendChild(branch);
+}
+
+function renderEvents() {
+  eventsNav.replaceChildren();
+  let group = "";
+  events.forEach(event => {
+    if (event.group !== group) {
+      group = event.group;
+      const heading = document.createElement("div");
+      heading.className = "group";
+      heading.textContent = group;
+      eventsNav.appendChild(heading);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "event" + (event.id === current ? " on" : "");
+    button.dataset.event = event.id;
+    const kind = document.createElement("span");
+    kind.className = "kind";
+    kind.textContent = event.kind;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = event.title;
+    button.append(kind, name);
+    button.addEventListener("click", () => show(event.id));
+    eventsNav.appendChild(button);
+  });
+}
+
+function renderChain() {
+  const event = eventById[current];
+  chain.replaceChildren();
+  const banner = document.createElement("div");
+  banner.className = "banner";
+  const kind = document.createElement("span");
+  kind.className = "kind";
+  kind.textContent = event.kind;
+  const title = document.createElement("h2");
+  title.textContent = event.title;
+  const blurb = document.createElement("p");
+  blurb.textContent = event.blurb;
+  banner.append(kind, title, blurb);
+  chain.appendChild(banner);
+  chain.appendChild(renderVia("calls"));
+  renderBranch(event.root, chain);
+  if (event.note) {
+    const note = document.createElement("div");
+    note.className = "note";
+    const text = document.createElement("p");
+    text.textContent = event.note;
+    note.appendChild(text);
+    const row = document.createElement("div");
+    row.className = "rel";
+    event.jumps.forEach(id => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = eventById[id].kind + " · " + eventById[id].title;
+      button.addEventListener("click", () => show(id));
+      row.appendChild(button);
+    });
+    note.appendChild(row);
+    chain.appendChild(note);
+  }
+}
+
+function edgeTo(id, event) {
+  let edge = null;
+  function scan(node, parent, via) {
+    if (node.parallel) node.parallel.forEach(child => scan(child, parent, node.via));
+    if (node.id === id) edge = { parent, via: node.via || via || "calls" };
+    (node.children || []).forEach(child => scan(child, node, null));
+  }
+  scan(event.root, null, null);
+  return edge;
+}
+
+function callSentence(id) {
+  const edge = edgeTo(id, eventById[current]);
+  if (!edge || !edge.parent) return "This event calls " + nodes[id][0] + ".";
+  const via = edge.via === "calls" ? "calls" : edge.via;
+  return nodes[edge.parent.id][0] + " " + via + " " + nodes[id][0] + ".";
+}
+
+function findNode(node, id) {
+  if (!node) return null;
+  if (node.id === id) return node;
+  for (const child of node.children || []) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  for (const child of node.parallel || []) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function renderDetail() {
+  const info = nodes[selected];
+  detail.replaceChildren();
+  const title = document.createElement("h2");
+  title.textContent = info[0];
+  const file = document.createElement("p");
+  file.className = "file";
+  file.textContent = info[1].includes(" ") ? info[1] : "Sources/TokenBar/" + info[1];
+  const call = document.createElement("p");
+  call.className = "call";
+  call.textContent = callSentence(selected);
+  const about = document.createElement("p");
+  about.className = "about";
+  about.textContent = info[2];
+  detail.append(title, file, call, about);
+
+  const here = findNode(eventById[current].root, selected);
+  const children = [];
+  (here && here.children || []).forEach(child => { if (child.id) children.push(child.id); });
+  (here && here.parallel || []).forEach(child => { if (child.id) children.push(child.id); });
+  if (children.length) {
+    const heading = document.createElement("h3");
+    heading.textContent = "It calls";
+    const row = document.createElement("div");
+    row.className = "rel";
+    children.forEach(id => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = nodes[id][0];
+      button.addEventListener("click", () => select(id));
+      row.appendChild(button);
+    });
+    detail.append(heading, row);
+  }
+
+  const others = eventsFor(selected).filter(event => event.id !== current);
+  if (others.length) {
+    const heading = document.createElement("h3");
+    heading.textContent = "Also runs when";
+    const row = document.createElement("div");
+    row.className = "rel";
+    others.forEach(event => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = event.kind + " · " + event.title;
+      button.addEventListener("click", () => show(event.id, selected));
+      row.appendChild(button);
+    });
+    detail.append(heading, row);
+  }
+}
+
+function show(id, keep) {
+  current = id;
+  const event = eventById[id];
+  selected = keep && findNode(event.root, keep) ? keep : event.root.id;
+  location.hash = id;
+  renderEvents();
+  renderChain();
+  renderDetail();
+}
+
+function select(id) {
+  if (!findNode(eventById[current].root, id)) {
+    const home = eventsFor(id)[0];
+    if (home) show(home.id, id);
+    return;
+  }
+  selected = id;
+  renderChain();
+  renderDetail();
+}
+
+const initial = location.hash.replace("#", "");
+show(eventById[initial] ? initial : "poll");
+</script>
+</body>
+</html>
