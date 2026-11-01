@@ -28,6 +28,21 @@ final class TouchBarStripView: NSView {
     private var rowMoved = false
     private var laidOutIDs: [String] = []
     private var loggedHidden = -1
+    /// A reorder in progress. The clock owns each chip's frame until it finishes.
+    private var trade: Trade?
+    private var tradeTimer: Timer?
+
+    /// Long enough to follow a chip coming from the far end.
+    private static let tradeDuration: TimeInterval = 1.0
+
+    private struct Trade {
+        let ids: [String]
+        let started: Date
+        var fromX: [String: CGFloat]
+        var fromW: [String: CGFloat]
+        var toX: [String: CGFloat]
+        var toW: [String: CGFloat]
+    }
 
     override var isFlipped: Bool { true }
     /// Width comes from the Touch Bar slot. A fixed 680 makes macOS scroll the
@@ -105,6 +120,7 @@ final class TouchBarStripView: NSView {
     override func layout() {
         super.layout()
         if marqueeUp {
+            if trade != nil { stopTrade(atEnd: false) }
             for view in chipViews.values { view.isHidden = true }
             tokenView?.isHidden = true
             costView?.isHidden = true
@@ -142,15 +158,15 @@ final class TouchBarStripView: NSView {
 
     /// Every checked chip stays in one row. Today stays put. A finger drag
     /// slides the row, and an arrow stays on the edge while any chip is past it.
+    /// A reorder slides each chip from its old slot to the new one. The countdown
+    /// tick keeps writing frames immediately. A finger-drag, a row already slid
+    /// off the left edge, or a second reorder cuts to the new slots.
     private func layoutChips(in clipW: CGFloat, height: CGFloat, spacing: CGFloat) {
         let ids = chips.map(\.id)
-        if ids != laidOutIDs {
-            laidOutIDs = ids
-            chipOffset = 0
-        }
         guard !chips.isEmpty, clipW > 1 else {
             leadingHint.isHidden = true
             trailingHint.isHidden = true
+            if trade != nil { stopTrade(atEnd: false) }
             return
         }
         let widths = ChipLayout.sized(chips, budget: clipW)
@@ -158,20 +174,185 @@ final class TouchBarStripView: NSView {
             + CGFloat(max(0, chips.count - 1)) * spacing
         let overflow = row - clipW
         let canScroll = overflow > 12
+
+        if var trade, trade.ids == ids {
+            let frames = chipFrames(widths: widths, spacing: spacing, height: height)
+            for (id, frame) in frames {
+                trade.toX[id] = frame.minX
+                trade.toW[id] = frame.width
+            }
+            self.trade = trade
+            for chip in chips { chipViews[chip.id]?.isHidden = false }
+            updateEdges(clipW: clipW, height: height, spacing: spacing, overflow: overflow, canScroll: canScroll, widths: widths)
+            return
+        }
+
+        let orderChanged = !laidOutIDs.isEmpty && ids != laidOutIDs
+        let interrupting = trade != nil
+        if interrupting { stopTrade(atEnd: false) }
+        let scrolled = chipOffset > 0.5
+        let glide = orderChanged && !dragActive && !scrolled && !interrupting
+        if orderChanged && !glide { chipOffset = 0 }
         chipOffset = canScroll ? min(max(0, chipOffset), overflow) : 0
 
+        let frames = chipFrames(widths: widths, spacing: spacing, height: height)
+        if glide, startTrade(to: frames, ids: ids) {
+            laidOutIDs = ids
+            for chip in chips { chipViews[chip.id]?.isHidden = false }
+            updateEdges(clipW: clipW, height: height, spacing: spacing, overflow: overflow, canScroll: canScroll, widths: widths)
+            return
+        }
+
+        laidOutIDs = ids
+        for (id, frame) in frames {
+            guard let view = chipViews[id] else { continue }
+            view.isHidden = false
+            view.layoutWidth = frame.width
+            view.frame = frame
+        }
+        updateEdges(clipW: clipW, height: height, spacing: spacing, overflow: overflow, canScroll: canScroll, widths: widths)
+    }
+
+    private func chipFrames(widths: [String: CGFloat], spacing: CGFloat, height: CGFloat) -> [String: NSRect] {
         var cursor = -chipOffset
-        var hiddenNames: [String] = []
+        var frames: [String: NSRect] = [:]
         for chip in chips {
             let w = widths[chip.id] ?? 0
-            guard w >= 1, let view = chipViews[chip.id] else { continue }
-            view.isHidden = false
-            view.layoutWidth = w
-            view.frame = NSRect(x: cursor, y: 0, width: w, height: height)
-            if canScroll, cursor + w > clipW + 1 {
-                hiddenNames.append(chip.label)
+            if w >= 1 {
+                frames[chip.id] = NSRect(x: cursor, y: 0, width: w, height: height)
             }
             cursor += w + spacing
+        }
+        return frames
+    }
+
+    /// Slides chips that already have a slot. A chip that just appeared sits in its new slot.
+    private func startTrade(to targets: [String: NSRect], ids: [String]) -> Bool {
+        var fromX: [String: CGFloat] = [:]
+        var fromW: [String: CGFloat] = [:]
+        var toX: [String: CGFloat] = [:]
+        var toW: [String: CGFloat] = [:]
+        var moved = false
+        var newcomers: [(ChipBarView, NSRect)] = []
+        for id in ids {
+            guard let target = targets[id], let view = chipViews[id] else { continue }
+            let had = laidOutIDs.contains(id) && view.frame.width >= 1
+            let source = had ? view.frame : target
+            fromX[id] = source.minX
+            fromW[id] = source.width
+            toX[id] = target.minX
+            toW[id] = target.width
+            if had && abs(source.minX - target.minX) > 0.5 { moved = true }
+            if !had { newcomers.append((view, target)) }
+        }
+        guard moved else { return false }
+        trade = Trade(
+            ids: ids,
+            started: Date(),
+            fromX: fromX,
+            fromW: fromW,
+            toX: toX,
+            toW: toW
+        )
+        liftFrontRunner(fromX: fromX, toX: toX)
+        for (view, target) in newcomers {
+            view.layoutWidth = target.width
+            view.frame = target
+        }
+        Log.line("chips traded")
+        startTradeClock()
+        return true
+    }
+
+    /// The chip heading furthest toward the front draws above the ones it passes.
+    private func liftFrontRunner(fromX: [String: CGFloat], toX: [String: CGFloat]) {
+        let ranked = chips.sorted { lhs, rhs in
+            let dl = (toX[lhs.id] ?? 0) - (fromX[lhs.id] ?? 0)
+            let dr = (toX[rhs.id] ?? 0) - (fromX[rhs.id] ?? 0)
+            return dl > dr
+        }
+        for chip in ranked {
+            guard let view = chipViews[chip.id] else { continue }
+            chipClip.addSubview(view)
+        }
+    }
+
+    private func startTradeClock() {
+        tradeTimer?.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            self.stepTrade()
+        }
+        tradeTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stepTrade() {
+        guard let trade else {
+            tradeTimer?.invalidate()
+            tradeTimer = nil
+            return
+        }
+        let raw = Date().timeIntervalSince(trade.started) / Self.tradeDuration
+        let eased = easeInOut(raw)
+        let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
+        for (id, view) in chipViews {
+            guard let fx = trade.fromX[id], let tx = trade.toX[id],
+                  let fw = trade.fromW[id], let tw = trade.toW[id], tw >= 1 else { continue }
+            let x = fx + (tx - fx) * eased
+            let w = fw + (tw - fw) * eased
+            view.frame = NSRect(x: x, y: 0, width: max(1, w), height: height)
+        }
+        if raw >= 1 {
+            stopTrade(atEnd: true)
+            needsLayout = true
+        }
+    }
+
+    private func easeInOut(_ raw: Double) -> CGFloat {
+        let t = min(1, max(0, raw))
+        if t < 0.5 {
+            return CGFloat(4 * t * t * t)
+        }
+        let f = -2 * t + 2
+        return CGFloat(1 - (f * f * f) / 2)
+    }
+
+    private func stopTrade(atEnd: Bool) {
+        tradeTimer?.invalidate()
+        tradeTimer = nil
+        if atEnd, let trade {
+            let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
+            for (id, view) in chipViews {
+                guard let x = trade.toX[id], let w = trade.toW[id], w >= 1 else { continue }
+                view.layoutWidth = w
+                view.frame = NSRect(x: x, y: 0, width: w, height: height)
+            }
+        }
+        trade = nil
+    }
+
+    private func updateEdges(
+        clipW: CGFloat,
+        height: CGFloat,
+        spacing: CGFloat,
+        overflow: CGFloat,
+        canScroll: Bool,
+        widths: [String: CGFloat]
+    ) {
+        var cursor = -chipOffset
+        var hiddenNames: [String] = []
+        if canScroll {
+            for chip in chips {
+                let w = widths[chip.id] ?? 0
+                if cursor + w > clipW + 1 {
+                    hiddenNames.append(chip.label)
+                }
+                cursor += w + spacing
+            }
         }
 
         let moreOnRight = overflow - chipOffset > 12
@@ -215,6 +396,7 @@ final class TouchBarStripView: NSView {
     private func dragMoved(to x: CGFloat, chip: ChipBarView?) {
         let dx = x - dragOriginX
         if abs(dx) > 8 {
+            if trade != nil { stopTrade(atEnd: true) }
             dragPastSlop = true
             rowMoved = true
             chip?.suppressNextClick()

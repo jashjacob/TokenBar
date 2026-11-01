@@ -15,16 +15,40 @@ enum ChipLayout {
     /// then used since yesterday, then quiet cards that still have some usage,
     /// then a chip that has not moved in a day.
     /// An idle 5-hour chip does not sit ahead of a tool you are actually in.
+    /// When a tool's 5-hour chip is on, that chip stays left of the tool's
+    /// longer windows. A weekly chip already further right stays where it is.
     static func ordered(
         _ chips: [Chip],
         now: Date = Date(),
         activeAt: [String: Date] = [:],
         returnedAt: [String: Date] = [:]
     ) -> [Chip] {
-        chips.enumerated().sorted { lhs, rhs in
-            rank(lhs.element, index: lhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt)
-                < rank(rhs.element, index: rhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt)
+        let sessions = sessionNames(in: chips)
+        let ranked = chips.enumerated().sorted { lhs, rhs in
+            rank(lhs.element, index: lhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt, sessionNames: sessions)
+                < rank(rhs.element, index: rhs.offset, now: now, activeAt: activeAt, returnedAt: returnedAt, sessionNames: sessions)
         }.map(\.element)
+        return sessionFirst(ranked)
+    }
+
+    /// A longer window that sorted left of its own 5-hour chip moves to just
+    /// after that chip. One that is already further right is left alone.
+    private static func sessionFirst(_ chips: [Chip]) -> [Chip] {
+        var result = chips
+        for session in chips where isSession(session) {
+            let ahead = result.filter { chip in
+                guard chip.shortName == session.shortName, chip.id != session.id, chip.windowTag != nil else { return false }
+                guard let longerAt = result.firstIndex(where: { $0.id == chip.id }),
+                      let sessionAt = result.firstIndex(where: { $0.id == session.id }) else { return false }
+                return longerAt < sessionAt
+            }
+            guard !ahead.isEmpty else { continue }
+            let aheadIDs = Set(ahead.map(\.id))
+            result.removeAll { aheadIDs.contains($0.id) }
+            guard let sessionAt = result.firstIndex(where: { $0.id == session.id }) else { continue }
+            result.insert(contentsOf: ahead, at: sessionAt + 1)
+        }
+        return result
     }
 
     static func describe(
@@ -33,10 +57,16 @@ enum ChipLayout {
         activeAt: [String: Date] = [:],
         returnedAt: [String: Date] = [:]
     ) -> String {
-        ordered(chips, now: now, activeAt: activeAt, returnedAt: returnedAt).map { chip in
-            let name = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt).label
+        let sessions = sessionNames(in: chips)
+        return ordered(chips, now: now, activeAt: activeAt, returnedAt: returnedAt).map { chip in
+            let name = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt, sessionNames: sessions).label
             return "\(chip.label) (\(name))"
         }.joined(separator: " | ")
+    }
+
+    /// Tools whose 5-hour chip is already on this strip.
+    private static func sessionNames(in chips: [Chip]) -> Set<String> {
+        Set(chips.filter(isSession).map(\.shortName))
     }
 
     private struct Rank: Comparable {
@@ -89,21 +119,31 @@ enum ChipLayout {
     /// A full card leads only when the refill is this close. Four days is not that.
     private static let soonReset: TimeInterval = 24 * 60 * 60
 
+    /// A weekly, 7-day, or monthly chip whose own 5-hour chip is on the strip.
+    /// The session chip is the one that can lead. The longer chip does not.
+    private static func coveredBySession(_ chip: Chip, sessionNames: Set<String>) -> Bool {
+        guard chip.windowTag != nil, !isSession(chip) else { return false }
+        return sessionNames.contains(chip.shortName)
+    }
+
     private static func placement(
         of chip: Chip,
         now: Date,
         activeAt: [String: Date],
-        returnedAt: [String: Date]
+        returnedAt: [String: Date],
+        sessionNames: Set<String>
     ) -> Placement {
         let full = chip.showsStackedFull
         let empty = Int(chip.percent.rounded()) == 0
         let stamp = activeAt[chip.id]
-        if fresh(stamp, now: now, window: ChipActivity.hold) { return .active }
+        let covered = coveredBySession(chip, sessionNames: sessionNames)
+        if !covered, fresh(stamp, now: now, window: ChipActivity.hold) { return .active }
         // A full card leads only when it refills within a day. A month with
         // days left is just another long card. A reset comes forward only when
-        // the window was actually spent.
-        if full, let left = chip.remaining, left <= soonReset { return .reminder }
-        if fresh(returnedAt[chip.id], now: now, window: ChipActivity.hold) { return .reminder }
+        // the window was actually spent. A longer window does not take that
+        // spot while its 5-hour chip is on.
+        if !covered, full, let left = chip.remaining, left <= soonReset { return .reminder }
+        if !covered, fresh(returnedAt[chip.id], now: now, window: ChipActivity.hold) { return .reminder }
         if fresh(stamp, now: now, window: ChipActivity.recent) { return .recent }
         if empty { return .empty }
         // No countdown at all. A full month that still has days sorts with the other long cards.
@@ -122,10 +162,11 @@ enum ChipLayout {
         index: Int,
         now: Date,
         activeAt: [String: Date],
-        returnedAt: [String: Date]
+        returnedAt: [String: Date],
+        sessionNames: Set<String>
     ) -> Rank {
         let remaining = chip.remaining ?? .greatestFiniteMagnitude
-        let place = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt)
+        let place = placement(of: chip, now: now, activeAt: activeAt, returnedAt: returnedAt, sessionNames: sessionNames)
         switch place {
         case .active, .recent:
             let when = activeAt[chip.id]?.timeIntervalSince1970 ?? 0
