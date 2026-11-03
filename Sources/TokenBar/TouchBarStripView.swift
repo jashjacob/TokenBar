@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 /// One Touch Bar item that owns Today + every selected chip and lays them
 /// out from the real item width, so macOS cannot hide the last card.
@@ -28,18 +29,15 @@ final class TouchBarStripView: NSView {
     private var rowMoved = false
     private var laidOutIDs: [String] = []
     private var loggedHidden = -1
-    /// A reorder in progress. The clock owns each chip's frame until it finishes.
+    /// A reorder in progress. Core Animation moves the cached chips.
     private var trade: Trade?
-    private var tradeTimer: Timer?
+    private var tradeGeneration = 0
 
     /// Long enough to follow a chip coming from the far end.
     private static let tradeDuration: TimeInterval = 1.0
 
     private struct Trade {
         let ids: [String]
-        let started: Date
-        var fromX: [String: CGFloat]
-        var fromW: [String: CGFloat]
         var toX: [String: CGFloat]
         var toW: [String: CGFloat]
     }
@@ -158,9 +156,8 @@ final class TouchBarStripView: NSView {
 
     /// Every checked chip stays in one row. Today stays put. A finger drag
     /// slides the row, and an arrow stays on the edge while any chip is past it.
-    /// A reorder slides each chip from its old slot to the new one. The countdown
-    /// tick keeps writing frames immediately. A finger-drag, a row already slid
-    /// off the left edge, or a second reorder cuts to the new slots.
+    /// A reorder slides the already-drawn chips. A finger-drag, a row already
+    /// slid off the left edge, or a second reorder cuts to the new slots.
     private func layoutChips(in clipW: CGFloat, height: CGFloat, spacing: CGFloat) {
         let ids = chips.map(\.id)
         guard !chips.isEmpty, clipW > 1 else {
@@ -204,12 +201,15 @@ final class TouchBarStripView: NSView {
         }
 
         laidOutIDs = ids
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         for (id, frame) in frames {
             guard let view = chipViews[id] else { continue }
             view.isHidden = false
             view.layoutWidth = frame.width
             view.frame = frame
         }
+        CATransaction.commit()
         updateEdges(clipW: clipW, height: height, spacing: spacing, overflow: overflow, canScroll: canScroll, widths: widths)
     }
 
@@ -227,9 +227,9 @@ final class TouchBarStripView: NSView {
     }
 
     /// Slides chips that already have a slot. A chip that just appeared sits in its new slot.
+    /// Width is applied once. The move itself is the cached picture, so the text is not redrawn each step.
     private func startTrade(to targets: [String: NSRect], ids: [String]) -> Bool {
         var fromX: [String: CGFloat] = [:]
-        var fromW: [String: CGFloat] = [:]
         var toX: [String: CGFloat] = [:]
         var toW: [String: CGFloat] = [:]
         var moved = false
@@ -239,29 +239,57 @@ final class TouchBarStripView: NSView {
             let had = laidOutIDs.contains(id) && view.frame.width >= 1
             let source = had ? view.frame : target
             fromX[id] = source.minX
-            fromW[id] = source.width
             toX[id] = target.minX
             toW[id] = target.width
             if had && abs(source.minX - target.minX) > 0.5 { moved = true }
             if !had { newcomers.append((view, target)) }
         }
         guard moved else { return false }
-        trade = Trade(
-            ids: ids,
-            started: Date(),
-            fromX: fromX,
-            fromW: fromW,
-            toX: toX,
-            toW: toW
-        )
+        tradeGeneration += 1
+        trade = Trade(ids: ids, toX: toX, toW: toW)
         liftFrontRunner(fromX: fromX, toX: toX)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         for (view, target) in newcomers {
             view.layoutWidth = target.width
             view.frame = target
         }
+        CATransaction.commit()
+        let generation = tradeGeneration
+        DispatchQueue.main.async { [weak self] in
+            self?.runTradeAnimation(generation: generation)
+        }
         Log.line("chips traded")
-        startTradeClock()
         return true
+    }
+
+    /// Moves each cached chip to its new x. Drawing happens only if the width changed.
+    private func runTradeAnimation(generation: Int) {
+        guard tradeGeneration == generation, let trade else { return }
+        let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (id, view) in chipViews {
+            guard let w = trade.toW[id], w >= 1 else { continue }
+            guard abs(view.frame.width - w) > 0.5 else { continue }
+            view.layoutWidth = w
+            view.frame = NSRect(x: view.frame.minX, y: 0, width: w, height: height)
+            view.needsDisplay = true
+        }
+        CATransaction.commit()
+
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = Self.tradeDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            for (id, view) in chipViews {
+                guard let tx = trade.toX[id], abs(view.frame.minX - tx) > 0.5 else { continue }
+                view.animator().setFrameOrigin(NSPoint(x: tx, y: 0))
+            }
+        }, completionHandler: { [weak self] in
+            guard let self, self.tradeGeneration == generation else { return }
+            self.stopTrade(atEnd: true)
+            self.needsLayout = true
+        })
     }
 
     /// The chip heading furthest toward the front draws above the ones it passes.
@@ -277,62 +305,20 @@ final class TouchBarStripView: NSView {
         }
     }
 
-    private func startTradeClock() {
-        tradeTimer?.invalidate()
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
-            guard let self else {
-                timer.invalidate()
-                return
-            }
-            self.stepTrade()
-        }
-        tradeTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    private func stepTrade() {
-        guard let trade else {
-            tradeTimer?.invalidate()
-            tradeTimer = nil
-            return
-        }
-        let raw = Date().timeIntervalSince(trade.started) / Self.tradeDuration
-        let eased = easeInOut(raw)
-        let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
-        for (id, view) in chipViews {
-            guard let fx = trade.fromX[id], let tx = trade.toX[id],
-                  let fw = trade.fromW[id], let tw = trade.toW[id], tw >= 1 else { continue }
-            let x = fx + (tx - fx) * eased
-            let w = fw + (tw - fw) * eased
-            view.frame = NSRect(x: x, y: 0, width: max(1, w), height: height)
-        }
-        if raw >= 1 {
-            stopTrade(atEnd: true)
-            needsLayout = true
-        }
-    }
-
-    private func easeInOut(_ raw: Double) -> CGFloat {
-        let t = min(1, max(0, raw))
-        if t < 0.5 {
-            return CGFloat(4 * t * t * t)
-        }
-        let f = -2 * t + 2
-        return CGFloat(1 - (f * f * f) / 2)
-    }
-
     private func stopTrade(atEnd: Bool) {
-        tradeTimer?.invalidate()
-        tradeTimer = nil
-        if atEnd, let trade {
-            let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
-            for (id, view) in chipViews {
-                guard let x = trade.toX[id], let w = trade.toW[id], w >= 1 else { continue }
-                view.layoutWidth = w
-                view.frame = NSRect(x: x, y: 0, width: w, height: height)
-            }
-        }
+        tradeGeneration += 1
+        let snapshot = trade
         trade = nil
+        let height = chipClip.bounds.height > 1 ? chipClip.bounds.height : 30
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (id, view) in chipViews {
+            view.layer?.removeAllAnimations()
+            guard atEnd, let snapshot, let x = snapshot.toX[id], let w = snapshot.toW[id], w >= 1 else { continue }
+            view.layoutWidth = w
+            view.frame = NSRect(x: x, y: 0, width: w, height: height)
+        }
+        CATransaction.commit()
     }
 
     private func updateEdges(

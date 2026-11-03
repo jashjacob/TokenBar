@@ -35,6 +35,9 @@ final class ChipBarView: NSButton {
         isEnabled = true
         setContentHuggingPriority(.required, for: .horizontal)
         setContentCompressionResistancePriority(.required, for: .horizontal)
+        wantsLayer = true
+        // A move reuses the drawing already on the chip.
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
         allowedTouchTypes = [.direct]
     }
 
