@@ -73,6 +73,7 @@ timeline
     7 Oct : Settings
     9 Oct : Follows what you use
     14 Oct : Sort by what you used
+    6 Nov : Before a week resets
 ```
 
 ## For coding agents
