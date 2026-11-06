@@ -263,7 +263,7 @@
     .sim-note .g { color: rgb(56, 214, 128); }
     .sim-note .a { color: rgb(255, 158, 46); }
     .sim-note .r { color: rgb(255, 84, 84); }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 28px; }
     .card {
       background: rgba(17,20,18,.8);
       border: 1px solid var(--line);
@@ -407,7 +407,19 @@
       <div class="card"><strong>The short ones stay big</strong>A 5-hour window keeps its place. Week and month step aside when the bar fills up.</div>
       <div class="card"><strong>It doesn’t go blank</strong>Command Code, OpenCode, Grok, Cursor, Kimi, Codex, and Antigravity can answer on their own when the feed goes quiet.</div>
       <div class="card"><strong>On the bar in a minute</strong>Three lines in Terminal. TokenBar shows up on the Touch Bar.</div>
+      <div class="card"><strong>Spend what’s left</strong>A soft pink line when a weekly chip still has allowance and the reset is close. Five-hour chips stay quiet.</div>
     </div>
+  </section>
+
+  <section class="block">
+    <h2>Before a week resets</h2>
+    <p>One soft line, once for that reset. It names what’s left and how long until the window refills, like “Claude 7d still has 36% left, and it resets in 22h.”</p>
+    <table>
+      <tr><th>Chip</th><th>When it speaks</th></tr>
+      <tr><td>Grok 7d</td><td>In the last two hours, if 10% or more is still unused. In the last day as well, if 20% or more is left.</td></tr>
+      <tr><td>GrokBot, Claude 7d, Opus 7d, Codex 7d, Kimi 7d, AG Cl 7d, Gm 7d, OpenCode wk, CmdCode wk</td><td>In the last day, if 20% or more is still unused.</td></tr>
+    </table>
+    <p>Five-hour chips stay quiet. Monthly chips stay quiet.</p>
   </section>
 
   <section class="block" id="install">

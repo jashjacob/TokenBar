@@ -24,8 +24,15 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var paceHistoryLoaded = false
     private var pacePending = false
     private var paceChoice: PaceBanner.Choice?
+    private var leftoverHistory = LeftoverBanner.History()
+    private var leftoverHistoryLoaded = false
+    private var leftoverPending = false
+    private var leftoverChoice: LeftoverBanner.Choice?
+    /// Runs once the sentence is actually on the strip.
+    private var bannerCommit: (() -> Void)?
     private static let paceFlashKey = "paceFlashes.v2"
     private static let paceFlashLegacyKey = "paceFlashedReset.v1"
+    private static let leftoverFlashKey = "leftoverFlashes.v1"
     var onCollapsed: (() -> Void)?
 
     var isPinned: Bool {
@@ -110,6 +117,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
         let resetIDs = offline ? [] : detectResets(in: chips, onStrip: onStrip)
         let paceIDs = offline ? [] : detectPaceFlashes(in: visible, skipping: Set(resetIDs))
+        let leftoverIDs = offline || !paceIDs.isEmpty
+            ? []
+            : detectLeftovers(in: visible, skipping: Set(resetIDs))
         self.chips = visible
         self.today = today
         self.offline = offline
@@ -129,6 +139,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             if isPinned, stripView == nil { presentExpanded() }
             DispatchQueue.main.async { [weak self] in
                 self?.flashPace(paceIDs)
+            }
+        } else if !leftoverIDs.isEmpty {
+            if isPinned, stripView == nil { presentExpanded() }
+            DispatchQueue.main.async { [weak self] in
+                self?.flashLeftover(leftoverIDs)
             }
         }
     }
@@ -497,33 +512,114 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
         paceChoice = PaceBanner.Choice(id: id, resetAt: reset, eta: eta)
         let text = PaceBanner.sentence(label: chip.label, percent: chip.percent, eta: eta)
-        presentBanner(text)
+        bannerCommit = { [weak self] in self?.commitPaceFlash() }
+        presentBanner(text, tone: .pace)
     }
 
-    private func presentBanner(_ text: String, attempt: Int = 0) {
+    /// Soonest weekly window that still has allowance inside its warning horizon.
+    /// GrokBot counts as weekly even though its label has no window tag. Five-hour chips are skipped.
+    /// A pace sentence wins the same poll. One sentence per reset.
+    private func detectLeftovers(in chips: [Chip], skipping: Set<String>) -> [String] {
+        loadLeftoverHistory()
+        if pacePending || leftoverPending { return [] }
+        let choices: [LeftoverBanner.Choice] = chips.compactMap { chip in
+            guard !skipping.contains(chip.id), let remaining = chip.remaining, let reset = chip.resetAt else { return nil }
+            guard LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: remaining) else { return nil }
+            let unused = 100 - min(max(chip.percent, 0), 100)
+            return LeftoverBanner.Choice(id: chip.id, resetAt: reset, remaining: remaining, unused: unused)
+        }
+        guard let best = leftoverHistory.next(choices, now: Date(), otherQuiet: paceHistory.lastAt) else { return [] }
+        leftoverPending = true
+        leftoverChoice = best
+        return [best.id]
+    }
+
+    private func loadLeftoverHistory() {
+        guard !leftoverHistoryLoaded else { return }
+        leftoverHistoryLoaded = true
+        guard let raw = UserDefaults.standard.dictionary(forKey: Self.leftoverFlashKey) else { return }
+        var history = LeftoverBanner.History()
+        if let last = raw["last"] as? Double {
+            history.lastAt = Date(timeIntervalSince1970: last)
+        }
+        let now = Date()
+        let spoken = raw["chips"] as? [String: Double] ?? [:]
+        for (id, stamp) in spoken {
+            let reset = Date(timeIntervalSince1970: stamp)
+            guard reset.timeIntervalSince(now) > -86_400 else { continue }
+            history.spoken[id] = reset
+        }
+        leftoverHistory = history
+    }
+
+    private func commitLeftover() {
+        guard let choice = leftoverChoice else { return }
+        let now = Date()
+        leftoverHistory.remember(choice, now: now)
+        paceHistory.lastAt = now
+        leftoverChoice = nil
+        leftoverPending = false
+        saveLeftoverHistory()
+        savePaceHistory()
+    }
+
+    private func saveLeftoverHistory() {
+        var chips: [String: Double] = [:]
+        for (id, reset) in leftoverHistory.spoken {
+            chips[id] = reset.timeIntervalSince1970
+        }
+        var raw: [String: Any] = ["chips": chips]
+        if let lastAt = leftoverHistory.lastAt {
+            raw["last"] = lastAt.timeIntervalSince1970
+        }
+        UserDefaults.standard.set(raw, forKey: Self.leftoverFlashKey)
+    }
+
+    private func flashLeftover(_ ids: [String]) {
+        guard let id = ids.first,
+              let chip = chips.first(where: { $0.id == id }),
+              LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0),
+              chip.resetAt != nil else {
+            leftoverPending = false
+            leftoverChoice = nil
+            return
+        }
+        let text = LeftoverBanner.sentence(label: chip.label, percent: chip.percent, remaining: chip.remaining ?? 0)
+        bannerCommit = { [weak self] in self?.commitLeftover() }
+        presentBanner(text, tone: .leftover)
+    }
+
+    private func presentBanner(_ text: String, tone: BannerTone, attempt: Int = 0) {
         if isPinned { presentExpanded() }
         // A collapsed bar keeps its view. Saving then would burn the window
         // on a sentence that never appeared.
         if presented, let strip = stripView {
-            commitPaceFlash()
-            Log.line("pace banner: \(text)")
+            bannerCommit?()
+            bannerCommit = nil
+            Log.line("banner: \(text)")
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-            strip.showBanner(text) {}
+            strip.showBanner(text, tone: tone) {}
             return
         }
         if !isPinned {
-            pacePending = false
-            paceChoice = nil
+            dropBanner()
             return
         }
         guard attempt < 20 else {
-            pacePending = false
-            paceChoice = nil
-            Log.line("pace banner missed, strip not ready")
+            dropBanner()
+            Log.line("banner missed, strip not ready")
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.presentBanner(text, attempt: attempt + 1)
+            self?.presentBanner(text, tone: tone, attempt: attempt + 1)
         }
+    }
+
+    private func dropBanner() {
+        bannerCommit = nil
+        pacePending = false
+        paceChoice = nil
+        leftoverPending = false
+        leftoverChoice = nil
     }
 }

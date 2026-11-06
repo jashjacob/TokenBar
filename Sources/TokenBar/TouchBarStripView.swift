@@ -102,10 +102,10 @@ final class TouchBarStripView: NSView {
     }
 
     /// Covers the whole strip with one scrolling sentence, then returns to the chips.
-    func showBanner(_ text: String, completion: @escaping () -> Void) {
+    func showBanner(_ text: String, tone: BannerTone = .pace, completion: @escaping () -> Void) {
         marqueeUp = true
         addSubview(marquee)
-        marquee.show(text) { [weak self] in
+        marquee.show(text, tone: tone) { [weak self] in
             guard let self else { return }
             self.marqueeUp = false
             self.marquee.isHidden = true
@@ -606,9 +606,15 @@ private final class EdgeHint: NSView {
     ]
 }
 
+enum BannerTone {
+    case pace
+    case leftover
+}
+
 /// One sentence scrolling across the full Touch Bar, then the chips come back.
 private final class MarqueeBanner: NSView {
     private var message = ""
+    private var tone: BannerTone = .pace
     private var onFinished: (() -> Void)?
     private var timer: Timer?
     private var began: Date?
@@ -616,8 +622,9 @@ private final class MarqueeBanner: NSView {
 
     override var isFlipped: Bool { true }
 
-    func show(_ text: String, completion: @escaping () -> Void) {
+    func show(_ text: String, tone: BannerTone = .pace, completion: @escaping () -> Void) {
         message = text
+        self.tone = tone
         onFinished = completion
         began = nil
         isHidden = false
@@ -631,7 +638,8 @@ private final class MarqueeBanner: NSView {
             if self.began == nil {
                 self.began = Date()
                 let distance = self.bounds.width + self.textWidth
-                let seconds = min(11, max(6, distance / 85))
+                let speed: CGFloat = self.tone == .leftover ? 60 : 85
+                let seconds = min(14, max(7, distance / speed))
                 self.runDuration = seconds
             }
             if Date().timeIntervalSince(self.began ?? Date()) >= self.runDuration {
@@ -650,10 +658,10 @@ private final class MarqueeBanner: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(srgbRed: 0.16, green: 0.09, blue: 0.02, alpha: 1).setFill()
+        fill.setFill()
         bounds.fill()
-        NSColor(srgbRed: 1.0, green: 0.62, blue: 0.18, alpha: 1).setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: 2).fill()
+        accent.setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: tone == .leftover ? 1 : 2).fill()
 
         guard began != nil else { return }
         let elapsed = Date().timeIntervalSince(began ?? Date())
@@ -662,22 +670,50 @@ private final class MarqueeBanner: NSView {
         let travel = bounds.width + width
         let x = bounds.width - travel * CGFloat(progress)
         let text = message as NSString
-        let size = text.size(withAttributes: Self.attrs)
+        let size = text.size(withAttributes: attrs)
         let rect = NSRect(
             x: x,
             y: (bounds.height - size.height) / 2,
             width: ceil(size.width),
             height: ceil(size.height)
         )
-        text.draw(in: rect, withAttributes: Self.attrs)
+        text.draw(in: rect, withAttributes: attrs)
     }
 
     private var textWidth: CGFloat {
-        ceil((message as NSString).size(withAttributes: Self.attrs).width)
+        ceil((message as NSString).size(withAttributes: attrs).width)
     }
 
-    private static let attrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-        .foregroundColor: NSColor(srgbRed: 1.0, green: 0.86, blue: 0.55, alpha: 1),
-    ]
+    private var fill: NSColor {
+        switch tone {
+        case .pace:
+            return NSColor(srgbRed: 0.16, green: 0.09, blue: 0.02, alpha: 1)
+        case .leftover:
+            return NSColor(srgbRed: 0.20, green: 0.08, blue: 0.16, alpha: 1)
+        }
+    }
+
+    private var accent: NSColor {
+        switch tone {
+        case .pace:
+            return NSColor(srgbRed: 1.0, green: 0.62, blue: 0.18, alpha: 1)
+        case .leftover:
+            return NSColor(srgbRed: 0.93, green: 0.55, blue: 0.74, alpha: 0.85)
+        }
+    }
+
+    private var attrs: [NSAttributedString.Key: Any] {
+        switch tone {
+        case .pace:
+            return [
+                .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+                .foregroundColor: NSColor(srgbRed: 1.0, green: 0.86, blue: 0.55, alpha: 1),
+            ]
+        case .leftover:
+            return [
+                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                .foregroundColor: NSColor(srgbRed: 0.98, green: 0.84, blue: 0.92, alpha: 1),
+            ]
+        }
+    }
 }

@@ -41,6 +41,26 @@ TokenTracker sometimes comes back stale or empty. With **Use fallbacks** on in S
 | ChatGPT / Codex | In |
 | Antigravity | In |
 
+## Before a week resets
+
+A soft pink line crosses the bar when a weekly window is about to reset and some of it is still unused. It speaks once for that reset. Five-hour chips stay quiet.
+
+Grok 7d speaks in the last two hours when 10% or more is left. It also speaks in the last day when 20% or more is left, and then it does not speak again for that reset.
+
+The same last-day line, when 20% or more is left:
+
+- GrokBot
+- Claude 7d
+- Opus 7d
+- Codex 7d
+- Kimi 7d
+- AG Cl 7d
+- Gm 7d
+- OpenCode wk
+- CmdCode wk
+
+Monthly chips stay quiet. The line reads like “Claude 7d still has 36% left, and it resets in 22h.”
+
 ## Along the way
 
 Every build is on the [releases page](https://github.com/jashjacob/TokenBar/releases).
