@@ -263,6 +263,94 @@
     .sim-note .g { color: rgb(56, 214, 128); }
     .sim-note .a { color: rgb(255, 158, 46); }
     .sim-note .r { color: rgb(255, 84, 84); }
+    .warn { margin: 28px 0 8px; }
+    .warn-label {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      margin: 0 0 10px;
+    }
+    .warn-label span { color: var(--muted); font-weight: 500; }
+    .warn-shell {
+      background: #050505;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 18px 16px;
+    }
+    .warn-bar {
+      position: relative;
+      height: 54px;
+      border-radius: 10px;
+      background: #101010;
+      overflow: hidden;
+    }
+    .warn-chips {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+    }
+    .warn-chip {
+      flex: 1;
+      height: 40px;
+      min-width: 0;
+      border-radius: 8px;
+      background: #1a1a1a;
+      padding: 5px 8px 6px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .warn-chip .row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+    .warn-chip .tag {
+      margin-left: 4px;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-size: 11px;
+      background: rgba(255,255,255,.08);
+    }
+    .warn-chip .time { color: rgba(255,255,255,.75); font-weight: 500; }
+    .warn-chip .barline { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+    .warn-chip .track { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.16); }
+    .warn-chip .fill { height: 4px; border-radius: 2px; }
+    .warn-chip .pct { font-size: 11px; font-weight: 700; min-width: 28px; text-align: right; }
+    .warn-chip .fill.g { background: rgb(56, 214, 128); }
+    .warn-chip .fill.a { background: rgb(255, 158, 46); }
+    .warn-chip .fill.r { background: rgb(255, 84, 84); }
+    .warn-chip .pct.g { color: rgb(56, 214, 128); }
+    .warn-chip .pct.a { color: rgb(255, 158, 46); }
+    .warn-chip .pct.r { color: rgb(255, 84, 84); }
+    .warn-marquee { position: absolute; inset: 0; display: none; }
+    .warn-bar.playing .warn-marquee { display: block; }
+    .warn-bar.playing .warn-chips { visibility: hidden; }
+    .warn-accent { position: absolute; top: 0; left: 0; right: 0; }
+    .warn-msg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      will-change: transform;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .warn-bar[data-tone="pace"] .warn-marquee { background: rgb(41, 23, 5); }
+    .warn-bar[data-tone="pace"] .warn-accent { height: 3px; background: rgb(255, 158, 46); }
+    .warn-bar[data-tone="pace"] .warn-msg { font-size: 22px; font-weight: 600; color: rgb(255, 219, 140); }
+    .warn-bar[data-tone="leftover"] .warn-marquee { background: rgb(51, 20, 41); }
+    .warn-bar[data-tone="leftover"] .warn-accent { height: 2px; background: rgba(237, 140, 189, .85); }
+    .warn-bar[data-tone="leftover"] .warn-msg { font-size: 20px; font-weight: 500; color: rgb(250, 214, 235); }
+    .warn-note {
+      margin: 10px 2px 0;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+    }
+    @media (max-width: 800px) {
+      .warn-bar[data-tone="pace"] .warn-msg { font-size: 16px; }
+      .warn-bar[data-tone="leftover"] .warn-msg { font-size: 15px; }
+    }
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 28px; }
     .card {
       background: rgba(17,20,18,.8);
@@ -411,9 +499,55 @@
     </div>
   </section>
 
-  <section class="block">
+  <section class="block" id="warnings">
     <h2>Before a week resets</h2>
-    <p>One soft line, once for that reset. It names what’s left and how long until the window refills, like “Claude 7d still has 36% left, and it resets in 22h.”</p>
+    <p>Two lines can cover the chips. Each one scrolls across once, then the chips come back.</p>
+    <div class="warn">
+      <p class="warn-label">Usage warning <span>amber, one pass</span></p>
+      <div class="warn-shell">
+        <div class="warn-bar" data-tone="pace" data-text="Claude 5h is burning fast. At this pace it runs out in 24m (91% used).">
+          <div class="warn-chips">
+            <div class="warn-chip">
+              <div class="row"><span>Claude <span class="tag">5h</span></span><span class="time">24m</span></div>
+              <div class="barline"><div class="track"><div class="fill r" style="width:91%"></div></div><span class="pct r">91%</span></div>
+            </div>
+            <div class="warn-chip">
+              <div class="row"><span>Codex <span class="tag">5h</span></span><span class="time">3h</span></div>
+              <div class="barline"><div class="track"><div class="fill g" style="width:18%"></div></div><span class="pct g">18%</span></div>
+            </div>
+            <div class="warn-chip">
+              <div class="row"><span>Grok <span class="tag">7d</span></span><span class="time">1h 45m</span></div>
+              <div class="barline"><div class="track"><div class="fill r" style="width:86%"></div></div><span class="pct r">86%</span></div>
+            </div>
+          </div>
+          <div class="warn-marquee"><div class="warn-accent"></div><div class="warn-msg"></div></div>
+        </div>
+      </div>
+      <p class="warn-note">Cream type on a dark amber field, with a brighter line along the top.</p>
+    </div>
+    <div class="warn">
+      <p class="warn-label">Unused warning <span>pink, one pass, a little slower</span></p>
+      <div class="warn-shell">
+        <div class="warn-bar" data-tone="leftover" data-text="Grok 7d still has 14% left, and it resets in 1h 45m.">
+          <div class="warn-chips">
+            <div class="warn-chip">
+              <div class="row"><span>GrokBot</span><span class="time">4d</span></div>
+              <div class="barline"><div class="track"><div class="fill a" style="width:48%"></div></div><span class="pct a">48%</span></div>
+            </div>
+            <div class="warn-chip">
+              <div class="row"><span>Grok <span class="tag">7d</span></span><span class="time">1h 45m</span></div>
+              <div class="barline"><div class="track"><div class="fill r" style="width:86%"></div></div><span class="pct r">86%</span></div>
+            </div>
+            <div class="warn-chip">
+              <div class="row"><span>Claude <span class="tag">5h</span></span><span class="time">3h</span></div>
+              <div class="barline"><div class="track"><div class="fill g" style="width:15%"></div></div><span class="pct g">15%</span></div>
+            </div>
+          </div>
+          <div class="warn-marquee"><div class="warn-accent"></div><div class="warn-msg"></div></div>
+        </div>
+      </div>
+      <p class="warn-note">Softer plum field and lighter pink type. This is the line Grok used.</p>
+    </div>
     <table>
       <tr><th>Chip</th><th>When it speaks</th></tr>
       <tr><td>Grok 7d</td><td>In the last two hours, if 10% or more is still unused. In the last day as well, if 20% or more is left.</td></tr>
@@ -538,6 +672,39 @@ cd TokenBar
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+    const warnSpeeds = { pace: { rate: 85, min: 6, max: 11 }, leftover: { rate: 60, min: 7, max: 14 } };
+    function playWarning(bar) {
+      const spec = warnSpeeds[bar.dataset.tone];
+      const msg = bar.querySelector(".warn-msg");
+      msg.textContent = bar.dataset.text;
+      bar.classList.add("playing");
+      const width = bar.clientWidth;
+      const textW = msg.getBoundingClientRect().width;
+      const seconds = Math.min(spec.max, Math.max(spec.min, (width + textW) / spec.rate));
+      msg.style.transition = "none";
+      msg.style.transform = "translateX(" + width + "px)";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          msg.style.transition = "transform " + seconds + "s linear";
+          msg.style.transform = "translateX(" + (-textW) + "px)";
+        });
+      });
+      window.clearTimeout(bar._warnTimer);
+      bar._warnTimer = window.setTimeout(() => {
+        bar.classList.remove("playing");
+        bar._warnTimer = window.setTimeout(() => playWarning(bar), 1600);
+      }, seconds * 1000 + 120);
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.querySelectorAll(".warn-bar").forEach((bar) => {
+        const msg = bar.querySelector(".warn-msg");
+        msg.textContent = bar.dataset.text;
+        msg.style.left = "16px";
+        bar.classList.add("playing");
+      });
+    } else {
+      document.querySelectorAll(".warn-bar").forEach(playWarning);
+    }
     const spot = document.querySelector(".spot");
     addEventListener("pointermove", (e) => {
       spot.style.setProperty("--x", e.clientX + "px");
