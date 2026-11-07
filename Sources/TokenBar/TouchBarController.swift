@@ -30,6 +30,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var leftoverChoice: LeftoverBanner.Choice?
     /// Runs once the sentence is actually on the strip.
     private var bannerCommit: (() -> Void)?
+    /// Bumped when a banner is dropped or replaced, so a late retry cannot show the old sentence.
+    private var bannerGeneration = 0
     private static let paceFlashKey = "paceFlashes.v2"
     private static let paceFlashLegacyKey = "paceFlashedReset.v1"
     private static let leftoverFlashKey = "leftoverFlashes.v1"
@@ -410,14 +412,20 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     /// that has not already been said at this severity.
     private func detectPaceFlashes(in chips: [Chip], skipping: Set<String>) -> [String] {
         loadPaceHistory()
-        if pacePending { return [] }
+        loadLeftoverHistory()
+        if pacePending || leftoverPending { return [] }
         let choices: [PaceBanner.Choice] = chips.compactMap { chip in
             guard !skipping.contains(chip.id) else { return nil }
             guard ChipActivity.isInUse(chip.id) else { return nil }
             guard let eta = chip.paceRunout, let reset = chip.resetAt else { return nil }
             return PaceBanner.Choice(id: chip.id, resetAt: reset, eta: eta)
         }
-        guard let best = paceHistory.next(choices, now: Date()) else { return [] }
+        let now = Date()
+        guard let best = paceHistory.next(choices, now: now) else { return [] }
+        // A leftover sentence is not a pace escalation. The full quiet stretch still applies.
+        if let quiet = leftoverHistory.lastAt, now.timeIntervalSince(quiet) < PaceBanner.gap {
+            return []
+        }
         pacePending = true
         paceChoice = best
         return [best.id]
@@ -517,8 +525,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     /// Soonest weekly window that still has allowance inside its warning horizon.
-    /// GrokBot counts as weekly even though its label has no window tag. Five-hour chips are skipped.
-    /// A pace sentence wins the same poll. One sentence per reset.
+    /// GrokBot counts as weekly even though its label has no window tag.
     private func detectLeftovers(in chips: [Chip], skipping: Set<String>) -> [String] {
         loadLeftoverHistory()
         if pacePending || leftoverPending { return [] }
@@ -589,7 +596,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         presentBanner(text, tone: .leftover)
     }
 
-    private func presentBanner(_ text: String, tone: BannerTone, attempt: Int = 0) {
+    private func presentBanner(_ text: String, tone: BannerTone, generation: Int? = nil, attempt: Int = 0) {
+        let generation = generation ?? {
+            bannerGeneration += 1
+            return bannerGeneration
+        }()
+        guard generation == bannerGeneration else { return }
         if isPinned { presentExpanded() }
         // A collapsed bar keeps its view. Saving then would burn the window
         // on a sentence that never appeared.
@@ -611,11 +623,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            self?.presentBanner(text, tone: tone, attempt: attempt + 1)
+            self?.presentBanner(text, tone: tone, generation: generation, attempt: attempt + 1)
         }
     }
 
     private func dropBanner() {
+        bannerGeneration += 1
         bannerCommit = nil
         pacePending = false
         paceChoice = nil

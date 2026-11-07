@@ -29,16 +29,17 @@ enum LeftoverBanner {
         var spoken: [String: Date] = [:]
 
         /// The soonest chip that has not already been said for this reset.
-        /// Nil during the quiet stretch after any banner.
+        /// A chip already said does not hide the next one. Nil during the quiet stretch.
         func next(_ choices: [Choice], now: Date, otherQuiet: Date?) -> Choice? {
             let ranked = choices.sorted { lhs, rhs in
                 if lhs.remaining != rhs.remaining { return lhs.remaining < rhs.remaining }
                 return lhs.id < rhs.id
             }
-            guard let best = ranked.first else { return nil }
-            if let said = spoken[best.id], abs(said.timeIntervalSince(best.resetAt)) < sameWindow {
-                return nil
+            let best = ranked.first { choice in
+                guard let said = spoken[choice.id] else { return true }
+                return abs(said.timeIntervalSince(choice.resetAt)) >= sameWindow
             }
+            guard let best else { return nil }
             if let otherQuiet, now.timeIntervalSince(otherQuiet) < PaceBanner.gap { return nil }
             if let lastAt, now.timeIntervalSince(lastAt) < PaceBanner.gap { return nil }
             return best
@@ -51,9 +52,7 @@ enum LeftoverBanner {
         }
     }
 
-    /// Grok speaks in the last two hours when 10% or more is left.
-    /// GrokBot, Codex 7d, Claude 7d, and the other weekly chips speak in the last day when 20% or more is left.
-    /// A five-hour chip never qualifies.
+    /// Five-hour chips come back the same afternoon, so they never qualify.
     static func qualifies(id: String, windowTag: String?, percent: Double, remaining: TimeInterval) -> Bool {
         guard remaining > floor else { return false }
         let unused = 100 - min(max(percent, 0), 100)
