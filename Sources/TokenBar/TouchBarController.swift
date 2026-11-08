@@ -524,8 +524,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         presentBanner(text, tone: .pace)
     }
 
-    /// Soonest weekly window that still has allowance inside its warning horizon.
-    /// GrokBot counts as weekly even though its label has no window tag.
+    /// Soonest week or month that still has allowance inside its last day.
+    /// GrokBot counts as a week even though its label has no window tag.
     private func detectLeftovers(in chips: [Chip], skipping: Set<String>) -> [String] {
         loadLeftoverHistory()
         if pacePending || leftoverPending { return [] }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// One soft sentence when a weekly window is about to reset and a real slice is still unused.
+/// One soft sentence when a week or a month is about to reset and a real slice is still unused.
 /// Five-hour chips stay quiet. They come back the same afternoon.
 enum LeftoverBanner {
     /// Grok's only quota window. A smaller leftover is still worth saying this close to the reset.
@@ -9,7 +9,7 @@ enum LeftoverBanner {
     static let grokMinimumUnused: Double = 10
     /// The label is just "GrokBot", but the window behind it is always 7 days.
     static let grokBotID = "cursor.quaternary_window"
-    /// Codex, Claude, GrokBot, and the other 7-day or weekly chips. A day is enough time to spend it.
+    /// A week or a month. The last day is the warning.
     static let weekHorizon: TimeInterval = 24 * 3600
     static let weekMinimumUnused: Double = 20
     /// Already rolling into the next window. The reset celebration covers that moment.
@@ -59,8 +59,8 @@ enum LeftoverBanner {
         if id == grokID, remaining <= grokHorizon, percent > 0, unused >= grokMinimumUnused {
             return true
         }
-        let weekly = windowTag == "7d" || windowTag == "wk" || id == grokBotID
-        guard weekly else { return false }
+        let closing = windowTag == "7d" || windowTag == "wk" || windowTag == "mo" || id == grokBotID
+        guard closing else { return false }
         guard remaining <= weekHorizon else { return false }
         return unused >= weekMinimumUnused
     }

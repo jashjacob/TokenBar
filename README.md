@@ -2,7 +2,7 @@
 
 See the quota before it runs out. Claude, Codex, Cursor, Grok, OpenCode, and Command Code, counting down on the Touch Bar.
 
-The chip you were just using sits first. Green, then amber, then red. Now and then a sentence runs across the whole bar. Amber if a window is going fast. Pink if a week still has some left.
+The chip you were just using sits first. Green, then amber, then red. Now and then a sentence runs across the whole bar. Amber if a window is going fast. Pink if a week or a month still has some left.
 
 <p align="center">
   <img src="docs/strip-packed.jpg" alt="TokenBar on the Touch Bar" width="920">
