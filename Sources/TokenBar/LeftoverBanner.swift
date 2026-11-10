@@ -12,6 +12,9 @@ enum LeftoverBanner {
     /// A week or a month. The last day is the warning.
     static let weekHorizon: TimeInterval = 24 * 3600
     static let weekMinimumUnused: Double = 20
+    /// A week that still reads as 3 days. More than half left is worth saying then.
+    static let weekEarlyHorizon: TimeInterval = 4 * 24 * 3600
+    static let weekEarlyMinimumUnused: Double = 50
     /// Already rolling into the next window. The reset celebration covers that moment.
     static let floor: TimeInterval = 2 * 60
     /// Codex slides its reset by a minute or two. That is the same window.
@@ -59,9 +62,12 @@ enum LeftoverBanner {
         if id == grokID, remaining <= grokHorizon, percent > 0, unused >= grokMinimumUnused {
             return true
         }
-        let closing = windowTag == "7d" || windowTag == "wk" || windowTag == "mo" || id == grokBotID
-        guard closing else { return false }
-        guard remaining <= weekHorizon else { return false }
+        let week = windowTag == "7d" || windowTag == "wk" || id == grokBotID
+        if week, remaining < weekEarlyHorizon, unused > weekEarlyMinimumUnused {
+            return true
+        }
+        let closing = week || windowTag == "mo"
+        guard closing, remaining <= weekHorizon else { return false }
         return unused >= weekMinimumUnused
     }
 
@@ -70,9 +76,13 @@ enum LeftoverBanner {
         return "\(label) still has \(unused)% left, and it resets in \(time(remaining))."
     }
 
-    /// `1h 40m`, `2h`, `50m`. Hours alone would hide most of the second hour.
+    /// `3d 17h`, `1h 40m`, `2h`, `50m`. Hours alone would hide most of the second hour.
     static func time(_ interval: TimeInterval) -> String {
         let t = max(0, Int(interval.rounded(.down)))
+        let days = t / 86_400
+        let dayHours = (t % 86_400) / 3600
+        if days > 0 && dayHours > 0 { return "\(days)d \(dayHours)h" }
+        if days > 0 { return "\(days)d" }
         let hours = t / 3600
         let mins = (t % 3600) / 60
         if hours > 0 && mins >= 10 { return "\(hours)h \(mins)m" }
