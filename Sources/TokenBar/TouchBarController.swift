@@ -28,6 +28,8 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private var leftoverHistoryLoaded = false
     private var leftoverPending = false
     private var leftoverChoice: LeftoverBanner.Choice?
+    /// Set when the pending pink line is OpenCode's renewal, not a leftover.
+    private var renewalSentence: String?
     /// Runs once the sentence is actually on the strip.
     private var bannerCommit: (() -> Void)?
     /// Bumped when a banner is dropped or replaced, so a late retry cannot show the old sentence.
@@ -119,9 +121,13 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
         let resetIDs = offline ? [] : detectResets(in: chips, onStrip: onStrip)
         let paceIDs = offline ? [] : detectPaceFlashes(in: visible, skipping: Set(resetIDs))
+        let skipping = Set(resetIDs)
         let leftoverIDs = offline || !paceIDs.isEmpty
             ? []
-            : detectLeftovers(in: visible, skipping: Set(resetIDs))
+            : detectLeftovers(in: visible, skipping: skipping)
+        let renewalIDs = offline || !paceIDs.isEmpty || !leftoverIDs.isEmpty
+            ? []
+            : detectRenewal(in: visible, skipping: skipping)
         self.chips = visible
         self.today = today
         self.offline = offline
@@ -142,10 +148,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.flashPace(paceIDs)
             }
-        } else if !leftoverIDs.isEmpty {
+        } else if !leftoverIDs.isEmpty || !renewalIDs.isEmpty {
             if isPinned, stripView == nil { presentExpanded() }
+            let ids = leftoverIDs.isEmpty ? renewalIDs : leftoverIDs
             DispatchQueue.main.async { [weak self] in
-                self?.flashLeftover(leftoverIDs)
+                self?.flashLeftover(ids)
             }
         }
     }
@@ -538,7 +545,41 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         guard let best = leftoverHistory.next(choices, now: Date(), otherQuiet: paceHistory.lastAt) else { return [] }
         leftoverPending = true
         leftoverChoice = best
+        renewalSentence = nil
         return [best.id]
+    }
+
+    /// OpenCode and Command Code renew on their monthly reset. Speak once on the last day
+    /// when the leftover line has nothing left to mention. The sooner date goes first.
+    private func detectRenewal(in chips: [Chip], skipping: Set<String>) -> [String] {
+        loadPaceHistory()
+        loadLeftoverHistory()
+        if pacePending || leftoverPending { return [] }
+        let ranked = chips.compactMap { chip -> (chip: Chip, remaining: TimeInterval, reset: Date)? in
+            guard !skipping.contains(chip.id),
+                  let remaining = chip.remaining,
+                  let reset = chip.resetAt,
+                  RenewalReminder.qualifies(id: chip.id, remaining: remaining)
+            else { return nil }
+            if let said = leftoverHistory.spoken[chip.id],
+               abs(said.timeIntervalSince(reset)) < LeftoverBanner.sameWindow {
+                return nil
+            }
+            return (chip, remaining, reset)
+        }.sorted { lhs, rhs in
+            if lhs.remaining != rhs.remaining { return lhs.remaining < rhs.remaining }
+            return lhs.chip.id < rhs.chip.id
+        }
+        guard let best = ranked.first, let text = RenewalReminder.sentence(id: best.chip.id, remaining: best.remaining) else {
+            return []
+        }
+        let now = Date()
+        if let quiet = paceHistory.lastAt, now.timeIntervalSince(quiet) < PaceBanner.gap { return [] }
+        if let lastAt = leftoverHistory.lastAt, now.timeIntervalSince(lastAt) < PaceBanner.gap { return [] }
+        leftoverPending = true
+        leftoverChoice = LeftoverBanner.Choice(id: best.chip.id, resetAt: best.reset, remaining: best.remaining, unused: 0)
+        renewalSentence = text
+        return [best.chip.id]
     }
 
     private func loadLeftoverHistory() {
@@ -585,13 +626,23 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private func flashLeftover(_ ids: [String]) {
         guard let id = ids.first,
               let chip = chips.first(where: { $0.id == id }),
-              LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0),
               chip.resetAt != nil else {
+            renewalSentence = nil
             leftoverPending = false
             leftoverChoice = nil
             return
         }
-        let text = LeftoverBanner.sentence(label: chip.label, percent: chip.percent, remaining: chip.remaining ?? 0)
+        let text: String
+        if let renewalSentence {
+            text = renewalSentence
+            self.renewalSentence = nil
+        } else if LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0) {
+            text = LeftoverBanner.sentence(label: chip.label, percent: chip.percent, remaining: chip.remaining ?? 0)
+        } else {
+            leftoverPending = false
+            leftoverChoice = nil
+            return
+        }
         bannerCommit = { [weak self] in self?.commitLeftover() }
         presentBanner(text, tone: .leftover)
     }
@@ -634,5 +685,6 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         paceChoice = nil
         leftoverPending = false
         leftoverChoice = nil
+        renewalSentence = nil
     }
 }

@@ -36,8 +36,15 @@ enum CommandCodeFallback {
            !env.isEmpty {
             return env
         }
-        let url = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".commandcode/auth.json")
+        // The key saved in TokenTracker. The CLI file can be a stale session.
+        if let stored = key(in: ".tokentracker/tracker/command-code-api-key.json") {
+            return stored
+        }
+        return key(in: ".commandcode/auth.json")
+    }
+
+    private static func key(in relativePath: String) -> String? {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(relativePath)
         guard let data = try? Data(contentsOf: url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let key = obj["apiKey"] as? String
