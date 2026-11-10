@@ -15,6 +15,8 @@ enum LeftoverBanner {
     /// A week that still reads as 3 days. More than half left is worth saying then.
     static let weekEarlyHorizon: TimeInterval = 4 * 24 * 3600
     static let weekEarlyMinimumUnused: Double = 50
+    /// More than half left, and only a few hours to use it. Say so again.
+    static let closeHorizon: TimeInterval = 6 * 3600
     /// Already rolling into the next window. The reset celebration covers that moment.
     static let floor: TimeInterval = 2 * 60
     /// Codex slides its reset by a minute or two. That is the same window.
@@ -27,19 +29,28 @@ enum LeftoverBanner {
         var unused: Double
     }
 
+    /// More than half is still unused and only a few hours remain.
+    static func isClose(_ choice: Choice) -> Bool {
+        choice.remaining <= closeHorizon && choice.unused > weekEarlyMinimumUnused
+    }
+
     struct History {
         var lastAt: Date?
         var spoken: [String: Date] = [:]
+        /// The close line for a reset, so the earlier warning does not use up the last few hours.
+        var closeSpoken: [String: Date] = [:]
 
         /// The soonest chip that has not already been said for this reset.
-        /// A chip already said does not hide the next one. Nil during the quiet stretch.
+        /// A chip already said does not hide the next one. A close call can speak again.
+        /// Nil during the quiet stretch.
         func next(_ choices: [Choice], now: Date, otherQuiet: Date?) -> Choice? {
             let ranked = choices.sorted { lhs, rhs in
                 if lhs.remaining != rhs.remaining { return lhs.remaining < rhs.remaining }
                 return lhs.id < rhs.id
             }
             let best = ranked.first { choice in
-                guard let said = spoken[choice.id] else { return true }
+                let said = LeftoverBanner.isClose(choice) ? closeSpoken[choice.id] : spoken[choice.id]
+                guard let said else { return true }
                 return abs(said.timeIntervalSince(choice.resetAt)) >= sameWindow
             }
             guard let best else { return nil }
@@ -49,9 +60,13 @@ enum LeftoverBanner {
         }
 
         mutating func remember(_ choice: Choice, now: Date) {
+            if LeftoverBanner.isClose(choice) {
+                closeSpoken[choice.id] = choice.resetAt
+            }
             spoken[choice.id] = choice.resetAt
             lastAt = now
             spoken = spoken.filter { $0.value.timeIntervalSince(now) > -86_400 }
+            closeSpoken = closeSpoken.filter { $0.value.timeIntervalSince(now) > -86_400 }
         }
     }
 

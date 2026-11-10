@@ -597,6 +597,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             guard reset.timeIntervalSince(now) > -86_400 else { continue }
             history.spoken[id] = reset
         }
+        let close = raw["close"] as? [String: Double] ?? [:]
+        for (id, stamp) in close {
+            let reset = Date(timeIntervalSince1970: stamp)
+            guard reset.timeIntervalSince(now) > -86_400 else { continue }
+            history.closeSpoken[id] = reset
+        }
         leftoverHistory = history
     }
 
@@ -616,7 +622,11 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         for (id, reset) in leftoverHistory.spoken {
             chips[id] = reset.timeIntervalSince1970
         }
-        var raw: [String: Any] = ["chips": chips]
+        var close: [String: Double] = [:]
+        for (id, reset) in leftoverHistory.closeSpoken {
+            close[id] = reset.timeIntervalSince1970
+        }
+        var raw: [String: Any] = ["chips": chips, "close": close]
         if let lastAt = leftoverHistory.lastAt {
             raw["last"] = lastAt.timeIntervalSince1970
         }
