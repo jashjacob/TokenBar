@@ -36,7 +36,7 @@ Command Code, OpenCode, Grok, Cursor, Kimi, Claude, Codex, and Antigravity can s
 
 Amber: “Claude 5h is burning fast. At this pace it runs out in 24m (91% used).”
 
-Pink: “Grok 7d still has 14% left, and it resets in 1h 45m.”
+Pink: “Grok 7d has 14% left. It resets in 1h 45m.”
 
 ## Along the way
 

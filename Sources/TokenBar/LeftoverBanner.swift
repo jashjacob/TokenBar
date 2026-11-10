@@ -71,9 +71,15 @@ enum LeftoverBanner {
         return unused >= weekMinimumUnused
     }
 
-    static func sentence(label: String, percent: Double, remaining: TimeInterval) -> String {
+    static func sentence(id: String, label: String, windowTag: String?, percent: Double, remaining: TimeInterval) -> String {
         let unused = Int((100 - min(max(percent, 0), 100)).rounded())
-        return "\(label) still has \(unused)% left, and it resets in \(time(remaining))."
+        let clock = time(remaining)
+        let rawUnused = 100 - min(max(percent, 0), 100)
+        let week = windowTag == "7d" || windowTag == "wk" || id == grokBotID
+        if week, remaining > weekHorizon, remaining < weekEarlyHorizon, rawUnused > weekEarlyMinimumUnused {
+            return "\(label) has \(unused)% left, with \(clock) to use it."
+        }
+        return "\(label) has \(unused)% left. It resets in \(clock)."
     }
 
     /// `3d 17h`, `1h 40m`, `2h`, `50m`. Hours alone would hide most of the second hour.

@@ -16,6 +16,6 @@ enum RenewalReminder {
 
     static func sentence(id: String, remaining: TimeInterval) -> String? {
         guard let name = names[id] else { return nil }
-        return "\(name) renews in \(LeftoverBanner.time(remaining))."
+        return "\(name) starts over in \(LeftoverBanner.time(remaining))."
     }
 }

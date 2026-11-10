@@ -637,7 +637,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             text = renewalSentence
             self.renewalSentence = nil
         } else if LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0) {
-            text = LeftoverBanner.sentence(label: chip.label, percent: chip.percent, remaining: chip.remaining ?? 0)
+            text = LeftoverBanner.sentence(id: chip.id, label: chip.label, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0)
         } else {
             leftoverPending = false
             leftoverChoice = nil
