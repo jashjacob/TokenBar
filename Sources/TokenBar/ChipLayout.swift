@@ -229,9 +229,9 @@ enum ChipLayout {
         return ceil(10 + inner + 6 + timeW)
     }
 
-    /// Hug each chip's text. OpenCode stays whole unless GrokBot is on a crowded
-    /// strip, where it becomes OC so that card can fit. Countdowns shorten only
-    /// after that. Claude, Codex, and Grok keep their full names.
+    /// Hug each chip's text. OpenCode and Command Code stay whole unless GrokBot
+    /// is on a crowded strip, where they become OC and CC. Countdowns shorten
+    /// only after that. Claude, Codex, and Grok keep their full names.
     static func sized(_ chips: [Chip], budget: CGFloat) -> [String: CGFloat] {
         guard !chips.isEmpty else { return [:] }
         let maxExtra: CGFloat

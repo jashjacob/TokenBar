@@ -171,10 +171,10 @@ struct Chip: Equatable, Identifiable {
         Int(percent.rounded()) >= 100
     }
 
-    /// Used when the strip is crowded (`CmdCode` → `CmdC`, `OpenCode` → `OC`).
+    /// Used when the strip is crowded (`CmdCode` → `CC`, `OpenCode` → `OC`).
     var compactName: String? {
         switch shortName {
-        case "CmdCode", "Command Code": return "CmdC"
+        case "CmdCode", "Command Code": return "CC"
         case "OpenCode": return "OC"
         default: return nil
         }
