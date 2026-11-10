@@ -16,7 +16,10 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     /// clear the strip before that app is actually up.
     private var awaitingLaunch: String?
     private var snapshots: [String: ChipSnapshot] = [:]
+    private var snapshotsLoaded = false
     private var lastCelebratedAt: [String: Date] = [:]
+    /// The reset worth a sentence this poll. The chip flash still runs for every id.
+    private var resetNotice: ResetNotice?
     private var lastOrder: [String] = []
     /// When each window last spoke, and when any sentence last covered the strip.
     /// Saved once the sentence is actually on the bar.
@@ -37,6 +40,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private static let paceFlashKey = "paceFlashes.v2"
     private static let paceFlashLegacyKey = "paceFlashedReset.v1"
     private static let leftoverFlashKey = "leftoverFlashes.v1"
+    private static let snapshotKey = "chipSnapshots.v1"
     var onCollapsed: (() -> Void)?
 
     var isPinned: Bool {
@@ -101,6 +105,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func update(chips: [Chip], today: TodayUsage?, offline: Bool) {
+        loadSnapshots()
         let live = chips.map { $0.withClock(previousReset: snapshots[$0.id]?.resetAt) }
         let shown = live.filter { ChipPreferences.isVisible($0.id) && !Chip.heldOffStrip($0.id, among: live) }
         let onStrip = Set(shown.map(\.id))
@@ -140,7 +145,10 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if !resetIDs.isEmpty {
             if isPinned { presentExpanded() }
             DispatchQueue.main.async { [weak self] in
-                self?.celebrate(resetIDs)
+                guard let self else { return }
+                let speaking = self.resetNotice != nil && self.isPinned
+                self.celebrate(resetIDs, haptic: !speaking)
+                if speaking { self.flashReset() }
             }
         }
         if !paceIDs.isEmpty {
@@ -383,7 +391,14 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     /// Compares the feed, not the locally rolled clock. A chip that is off the
     /// strip keeps a fresh snapshot and does not flash when it comes back.
     private func detectResets(in chips: [Chip], onStrip: Set<String>) -> [String] {
+        loadSnapshots()
+        // An empty feed is not a reset. Keep the last numbers for the next real poll.
+        guard !chips.isEmpty else {
+            resetNotice = nil
+            return []
+        }
         var fired: [String] = []
+        var notice: ResetNotice?
         var next: [String: ChipSnapshot] = [:]
         for chip in chips {
             let snapshot = ChipSnapshot(
@@ -397,22 +412,100 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
             let last = lastCelebratedAt[chip.id] ?? .distantPast
             guard Date().timeIntervalSince(last) > 60 else { continue }
             // An unused window resetting does not flash. It was already free.
-            if ResetDetector.didReset(old: old, new: chip), Int(old.percent.rounded()) > 0 {
-                lastCelebratedAt[chip.id] = Date()
-                fired.append(chip.id)
-            }
+            guard let kind = ResetDetector.noticeKind(old: old, new: chip),
+                  Int(old.percent.rounded()) > 0 else { continue }
+            lastCelebratedAt[chip.id] = Date()
+            fired.append(chip.id)
+            let drop = old.percent - chip.percent
+            let bestDrop = notice.map { $0.oldPercent - $0.newPercent } ?? -1
+            guard drop > bestDrop else { continue }
+            notice = ResetNotice(
+                label: chip.label,
+                oldPercent: old.percent,
+                newPercent: chip.percent,
+                kind: kind
+            )
         }
         snapshots = next
+        saveSnapshots()
+        resetNotice = notice
         return fired
     }
 
-    private func celebrate(_ ids: [String]) {
+    private func celebrate(_ ids: [String], haptic: Bool) {
         stripView?.playReset(ids)
         for id in ids {
             Log.line("reset effect: \(id)")
         }
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        if haptic {
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        }
         stripBot?.playReset()
+    }
+
+    /// Saved after the sentence is on the strip would be too late: the next
+    /// launch has to compare against the previous poll, not against itself.
+    private func loadSnapshots() {
+        guard !snapshotsLoaded else { return }
+        snapshotsLoaded = true
+        guard let raw = UserDefaults.standard.dictionary(forKey: Self.snapshotKey) else { return }
+        let percents = raw["percent"] as? [String: Any] ?? [:]
+        let resets = raw["reset"] as? [String: Any] ?? [:]
+        let remainings = raw["remaining"] as? [String: Any] ?? [:]
+        let sources = raw["source"] as? [String: Any] ?? [:]
+        var loaded: [String: ChipSnapshot] = [:]
+        for (id, value) in percents {
+            guard let percent = (value as? NSNumber)?.doubleValue else { continue }
+            let reset = (resets[id] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) }
+            let remaining = (remainings[id] as? NSNumber)?.doubleValue
+            let source: ChipSource = (sources[id] as? String) == "fallback" ? .fallback : .tokenTracker
+            loaded[id] = ChipSnapshot(percent: percent, resetAt: reset, remaining: remaining, source: source)
+        }
+        snapshots = loaded
+    }
+
+    private func saveSnapshots() {
+        var percents: [String: Double] = [:]
+        var resets: [String: Double] = [:]
+        var remainings: [String: Double] = [:]
+        var sources: [String: String] = [:]
+        for (id, snap) in snapshots {
+            percents[id] = snap.percent
+            if let reset = snap.resetAt {
+                resets[id] = reset.timeIntervalSince1970
+            }
+            if let remaining = snap.remaining {
+                remainings[id] = remaining
+            }
+            sources[id] = snap.source == .fallback ? "fallback" : "tracker"
+        }
+        UserDefaults.standard.set(
+            [
+                "percent": percents,
+                "reset": resets,
+                "remaining": remainings,
+                "source": sources,
+            ],
+            forKey: Self.snapshotKey
+        )
+    }
+
+    private func flashReset() {
+        guard let notice = resetNotice else { return }
+        resetNotice = nil
+        // Quiet the other lines for one gap. Do not mark this window as a leftover already said.
+        bannerCommit = { [weak self] in self?.noteResetQuiet() }
+        presentBanner(notice.sentence, tone: .reset)
+    }
+
+    private func noteResetQuiet() {
+        let now = Date()
+        loadPaceHistory()
+        loadLeftoverHistory()
+        paceHistory.lastAt = now
+        leftoverHistory.lastAt = now
+        savePaceHistory()
+        saveLeftoverHistory()
     }
 
     /// At most one sentence. Only a chip in use, and only the tightest estimate
@@ -696,5 +789,17 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         leftoverPending = false
         leftoverChoice = nil
         renewalSentence = nil
+        resetNotice = nil
+    }
+}
+
+private struct ResetNotice {
+    var label: String
+    var oldPercent: Double
+    var newPercent: Double
+    var kind: ResetDetector.Kind
+
+    var sentence: String {
+        ResetDetector.sentence(label: label, oldPercent: oldPercent, newPercent: newPercent, kind: kind)
     }
 }

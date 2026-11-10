@@ -609,6 +609,7 @@ private final class EdgeHint: NSView {
 enum BannerTone {
     case pace
     case leftover
+    case reset
 }
 
 /// One sentence scrolling across the full Touch Bar, then the chips come back.
@@ -690,6 +691,8 @@ private final class MarqueeBanner: NSView {
             return NSColor(srgbRed: 0.16, green: 0.09, blue: 0.02, alpha: 1)
         case .leftover:
             return NSColor(srgbRed: 0.20, green: 0.08, blue: 0.16, alpha: 1)
+        case .reset:
+            return NSColor(srgbRed: 0.04, green: 0.14, blue: 0.08, alpha: 1)
         }
     }
 
@@ -699,6 +702,8 @@ private final class MarqueeBanner: NSView {
             return NSColor(srgbRed: 1.0, green: 0.62, blue: 0.18, alpha: 1)
         case .leftover:
             return NSColor(srgbRed: 0.93, green: 0.55, blue: 0.74, alpha: 0.85)
+        case .reset:
+            return NSColor(srgbRed: 0.18, green: 0.78, blue: 0.42, alpha: 1)
         }
     }
 
@@ -713,6 +718,11 @@ private final class MarqueeBanner: NSView {
             return [
                 .font: NSFont.systemFont(ofSize: 13, weight: .medium),
                 .foregroundColor: NSColor(srgbRed: 0.98, green: 0.84, blue: 0.92, alpha: 1),
+            ]
+        case .reset:
+            return [
+                .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+                .foregroundColor: NSColor(srgbRed: 0.78, green: 0.96, blue: 0.84, alpha: 1),
             ]
         }
     }
