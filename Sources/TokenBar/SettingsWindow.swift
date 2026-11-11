@@ -214,6 +214,9 @@ private final class GeneralSettingsPane: NSViewController, NSTextFieldDelegate {
     private let portField = NSTextField()
     private let status = NSTextField(wrappingLabelWithString: "")
     private var applying = false
+    private var sawCheck = false
+    private var lastOffline = false
+    private var lastError: String?
 
     override func loadView() {
         login.target = self
@@ -253,18 +256,30 @@ private final class GeneralSettingsPane: NSViewController, NSTextFieldDelegate {
         )
         let card = SettingsChrome.listCard([launch, loginFailure, tracker])
         view = SettingsChrome.page([card])
-        apply(offline: true, error: nil)
+        render()
     }
 
     func apply(offline: Bool, error: String?) {
+        sawCheck = true
+        lastOffline = offline
+        lastError = error
         guard isViewLoaded else { return }
+        render()
+    }
+
+    /// The view can be built after a poll has already succeeded. Use that result,
+    /// instead of painting a failure just because the pane is opening.
+    private func render() {
         applying = true
         login.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
         if portField.currentEditor() == nil {
             portField.stringValue = String(LimitsClient.discoverPort())
         }
-        if offline {
-            status.stringValue = error ?? "TokenTracker is not running"
+        if !sawCheck {
+            status.stringValue = "Checking…"
+            status.textColor = .secondaryLabelColor
+        } else if lastOffline {
+            status.stringValue = lastError ?? "TokenTracker is not running"
             status.textColor = .systemRed
         } else {
             status.stringValue = "Running on port \(LimitsClient.discoverPort())"
