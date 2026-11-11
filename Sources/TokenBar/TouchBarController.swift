@@ -105,6 +105,9 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     }
 
     func update(chips: [Chip], today: TodayUsage?, offline: Bool) {
+        if !offline {
+            UsageLog.note(chips)
+        }
         loadSnapshots()
         let live = chips.map { $0.withClock(previousReset: snapshots[$0.id]?.resetAt) }
         let shown = live.filter { ChipPreferences.isVisible($0.id) && !Chip.heldOffStrip($0.id, among: live) }

@@ -12,6 +12,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let general = GeneralSettingsPane()
     private let touch = TouchBarSettingsPane()
     private let sources = SourcesSettingsPane()
+    private let insights = InsightsSettingsPane()
     private let about = AboutSettingsPane()
     private var touchBar: TouchBarController?
     private var onRefresh: (Bool) -> Void = { _ in }
@@ -38,6 +39,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         general.apply(offline: offline, error: error)
         touch.apply(bounce: touchBar?.bounceStripBot ?? false, leftovers: leftovers)
         sources.apply(fallbacks: ChipPreferences.fallbacksEnabled, tracker: tracker, fallback: fallback)
+        insights.apply(chips: chips)
+    }
+
+    func showInsights(chips: [Chip], today: TodayUsage?, offline: Bool, error: String?) {
+        root.pendingTitle = "Insights"
+        show(chips: chips, today: today, offline: offline, error: error)
+        root.showPane(named: "Insights")
     }
 
     func show(chips: [Chip], today: TodayUsage?, offline: Bool, error: String?) {
@@ -103,6 +111,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             ("General", general),
             ("Touch Bar", touch),
             ("Sources", sources),
+            ("Insights", insights),
             ("About", about),
         ]
         root.preferredContentSize = NSSize(width: 720, height: 500)
@@ -129,6 +138,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 @MainActor
 private final class SettingsRootController: NSViewController {
     var panes: [(title: String, controller: NSViewController)] = []
+    var pendingTitle: String?
     private let pills = PillBar()
     private let detail = NSView()
 
@@ -162,7 +172,19 @@ private final class SettingsRootController: NSViewController {
         ])
         view = root
         pills.reload()
-        select(0)
+        if let pendingTitle, let index = panes.firstIndex(where: { $0.title == pendingTitle }) {
+            self.pendingTitle = nil
+            select(index)
+        } else {
+            select(0)
+        }
+    }
+
+    func showPane(named title: String) {
+        pendingTitle = title
+        guard isViewLoaded, let index = panes.firstIndex(where: { $0.title == title }) else { return }
+        pendingTitle = nil
+        select(index)
     }
 
     private func select(_ index: Int) {

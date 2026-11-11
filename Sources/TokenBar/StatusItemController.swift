@@ -162,6 +162,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(dash)
 
         menu.addItem(.separator())
+        let insights = NSMenuItem(title: "Insights…", action: #selector(insightsClicked), keyEquivalent: "")
+        insights.target = self
+        menu.addItem(insights)
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(settingsClicked), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -230,6 +234,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         touchBar.isPinned.toggle()
         refreshOpenMenu()
         onRefresh(false)
+    }
+
+    @objc private func insightsClicked() {
+        SettingsWindow.shared.showInsights(chips: chips, today: today, offline: offline, error: lastError)
     }
 
     @objc private func settingsClicked() {
