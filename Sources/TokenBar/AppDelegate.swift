@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var today: TodayUsage?
     private var offline = true
     private var lastError: String?
+    /// One nap fails a poll. The bar stays up until the miss has lasted.
+    private var missedPolls = 0
     private var pollTimer: Timer?
     private var tickTimer: Timer?
     private var refreshTask: Task<Void, Never>?
@@ -74,13 +76,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let next = mergingGrokBot(try await chipsTask)
             chips = next
+            missedPolls = 0
             offline = false
             lastError = nil
             Log.line("fetched \(next.count) chips: \(next.map(\.touchTitle).joined(separator: " | "))")
         } catch {
-            offline = true
-            lastError = error.localizedDescription
+            missedPolls += 1
             Log.line("fetch failed: \(error.localizedDescription)")
+            // A dark wake often misses once. Keep the last reading until it has been quiet for a bit.
+            let giveUp = chips.isEmpty || bypassFallbackCache || missedPolls >= 3
+            if giveUp {
+                offline = true
+                lastError = error.localizedDescription
+            }
         }
         do {
             let usage = try await todayTask

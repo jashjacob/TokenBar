@@ -2,6 +2,7 @@ import Foundation
 
 enum LimitsError: LocalizedError {
     case offline
+    case timedOut
     case badPayload
     case tooLarge
     case http(Int)
@@ -9,6 +10,7 @@ enum LimitsError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .offline: return "TokenTracker is not running"
+        case .timedOut: return "TokenTracker timed out"
         case .badPayload: return "TokenTracker returned unreadable limits"
         case .tooLarge: return "TokenTracker response was too large"
         case .http(let code): return "TokenTracker HTTP \(code)"
@@ -20,6 +22,7 @@ enum LimitsError: LocalizedError {
         guard let limits = error as? LimitsError else { return error.localizedDescription }
         switch limits {
         case .offline: return "\(host) is not running"
+        case .timedOut: return "\(host) timed out"
         case .badPayload: return "\(host) returned unreadable data"
         case .tooLarge: return "\(host) response was too large"
         case .http(let code): return "\(host) HTTP \(code)"
@@ -43,6 +46,8 @@ enum LimitsClient {
             chips = try ChipParser.parse(try await get(URL(string: "http://127.0.0.1:\(discoverPort())\(path)")!))
         } catch let error as LimitsError {
             trackerError = error
+        } catch let url as URLError where url.code == .timedOut {
+            trackerError = LimitsError.timedOut
         } catch {
             trackerError = LimitsError.offline
         }
