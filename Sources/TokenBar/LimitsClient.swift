@@ -51,12 +51,14 @@ enum LimitsClient {
         } catch {
             trackerError = LimitsError.offline
         }
+        // TokenTracker never sends the month, so this fill stays on when the switch is off.
         chips = await fill(
             chips,
             ids: ["commandCode.primary_window", "commandCode.secondary_window", "commandCode.tertiary_window"],
             loader: CommandCodeFallback.chips,
             log: "command code",
-            bypassCache: bypassFallbackCache
+            bypassCache: bypassFallbackCache,
+            evenWhenSwitchOff: true
         )
         chips = await fill(
             chips,
@@ -124,9 +126,10 @@ enum LimitsClient {
         ids: [String],
         loader: () async -> [Chip],
         log: String,
-        bypassCache: Bool
+        bypassCache: Bool,
+        evenWhenSwitchOff: Bool = false
     ) async -> [Chip] {
-        guard ChipPreferences.fallbacksEnabled else { return chips }
+        guard ChipPreferences.fallbacksEnabled || evenWhenSwitchOff else { return chips }
         // A window with no reset time cannot show the next countdown. Let the
         // fallback supply one; a 5-minute cache keeps this off the 30-second poll.
         let have = Set(chips.compactMap { $0.resetAt == nil ? nil : $0.id })

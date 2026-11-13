@@ -426,7 +426,7 @@ private final class SourcesSettingsPane: NSViewController {
         let row = SettingsChrome.optionRow(
             symbol: "arrow.triangle.2.circlepath",
             title: "Use fallbacks",
-            subtitle: "When a tool’s windows are missing, TokenBar asks that tool itself. It owns every window for that tool and checks again after five minutes.",
+            subtitle: "When a tool’s windows are missing, TokenBar asks that tool itself. It owns every window for that tool and checks again after five minutes. Command Code’s month still fills in while this is off.",
             trailing: fallbacks
         )
         let card = SettingsChrome.listCard([row])

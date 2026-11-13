@@ -9,7 +9,8 @@ enum ChipPreferences {
     private static let migratedTodayKey = "migratedTodaySplit"
     private static let fallbacksKey = "fallbacksEnabled"
 
-    /// Off means TokenBar never calls Command Code, OpenCode, Grok, Cursor, Kimi, Codex, Antigravity, or Claude itself.
+    /// Off means TokenBar never calls OpenCode, Grok, Cursor, Kimi, Codex, Antigravity, or Claude itself.
+    /// Command Code still fills, because TokenTracker does not send the month.
     static var fallbacksEnabled: Bool {
         get {
             guard UserDefaults.standard.object(forKey: fallbacksKey) != nil else { return true }
