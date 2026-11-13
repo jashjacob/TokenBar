@@ -9,7 +9,6 @@ final class InsightsSettingsPane: NSViewController {
     private let graphs = NSStackView()
     private var chips: [Chip] = []
     private var selectedIDs = Set<String>()
-    private var seeded = false
     private var spanIsDay = true
     private var checkIDs: [String] = []
     private var cards: [Card] = []
@@ -86,11 +85,13 @@ final class InsightsSettingsPane: NSViewController {
 
     @objc private func chipToggled(_ sender: NSButton) {
         guard let id = sender.identifier?.rawValue else { return }
+        var hidden = ChipPreferences.insightHiddenIDs
         if sender.state == .on {
-            selectedIDs.insert(id)
+            hidden.remove(id)
         } else {
-            selectedIDs.remove(id)
+            hidden.insert(id)
         }
+        ChipPreferences.insightHiddenIDs = hidden
         cards = []
         reload()
     }
@@ -108,10 +109,8 @@ final class InsightsSettingsPane: NSViewController {
         }
 
         let known = listedChips(stored: stored)
-        if !seeded {
-            selectedIDs = Set(known.map(\.id))
-            seeded = true
-        }
+        let hidden = ChipPreferences.insightHiddenIDs
+        selectedIDs = Set(known.map(\.id)).subtracting(hidden)
         if known.map(\.id) != checkIDs {
             rebuildChecks(known)
             checkIDs = known.map(\.id)

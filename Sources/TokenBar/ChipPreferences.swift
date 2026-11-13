@@ -6,6 +6,7 @@ enum ChipPreferences {
     static let todayCostID = "today.cost"
     static let todayMetricIDs = [todayTokensID, todayCostID]
     private static let hiddenKey = "touchBarHiddenIDs"
+    private static let insightHiddenKey = "insightHiddenIDs"
     private static let migratedTodayKey = "migratedTodaySplit"
     private static let fallbacksKey = "fallbacksEnabled"
 
@@ -35,6 +36,12 @@ enum ChipPreferences {
     static var hiddenIDs: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: hiddenKey) ?? []) }
         set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: hiddenKey) }
+    }
+
+    /// Insights chips the user turned off. A new chip stays on until they uncheck it.
+    static var insightHiddenIDs: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: insightHiddenKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: insightHiddenKey) }
     }
 
     static func isVisible(_ id: String) -> Bool {
