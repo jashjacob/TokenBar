@@ -208,11 +208,12 @@ final class InsightsSettingsPane: NSViewController {
             let isSession = chip?.windowTag == "5h" || label.hasSuffix("5h")
             var windows: UsageGraphView?
             if isSession {
-                let caption = NSTextField(labelWithString: spanIsDay
-                    ? "5h windows in the last day, from the start. The newest is the strong line."
-                    : "Each 5h window, from the start. The newest is the strong line.")
+                let caption = NSTextField(wrappingLabelWithString: spanIsDay
+                    ? "5h windows in the last day, from the start. Each window has its own color. The newest is the strong line."
+                    : "Each 5h window, from the start. Each window has its own color. The newest is the strong line.")
                 caption.font = .systemFont(ofSize: 12, weight: .medium)
                 caption.textColor = .secondaryLabelColor
+                caption.preferredMaxLayoutWidth = 640
                 graphs.addArrangedSubview(caption)
                 let pace = UsageGraphView()
                 pace.translatesAutoresizingMaskIntoConstraints = false
@@ -230,6 +231,19 @@ struct UsagePlot {
     struct Run {
         var points: [(x: CGFloat, y: CGFloat)]
         var emphasis: CGFloat
+        /// Same window, same color, on the day graph and the overlay. Nil stays blue.
+        var tint: Int?
+    }
+
+    static func color(tint: Int?) -> NSColor {
+        guard let tint else { return .systemBlue }
+        let colors: [NSColor] = [
+            .systemBlue, .systemOrange, .systemGreen, .systemPink,
+            .systemTeal, .systemPurple, .systemCyan, .systemRed,
+        ]
+        let count = colors.count
+        let index = ((tint % count) + count) % count
+        return colors[index]
     }
 
     static let day: TimeInterval = 24 * 3600
@@ -248,7 +262,9 @@ struct UsagePlot {
             let points = visible.map { sample in
                 (x: CGFloat((sample.t - start) / span), y: CGFloat(min(max(sample.p, 0), 100) / 100))
             }
-            plot.runs.append(Run(points: points, emphasis: 1))
+            let reset = visible.compactMap(\.r).max()
+            let slot = reset.map { Int(($0 / (5 * 3600)).rounded()) }
+            plot.runs.append(Run(points: points, emphasis: 1, tint: slot))
         }
         return plot
     }
@@ -278,7 +294,9 @@ struct UsagePlot {
                 points.append((x: CGFloat(into), y: CGFloat(min(max(sample.p, 0), 100) / 100)))
             }
             guard !points.isEmpty else { continue }
-            plot.runs.append(Run(points: points, emphasis: newest ? 1 : 0.35))
+            let reset = run.compactMap(\.r).max() ?? 0
+            let slot = Int((reset / length).rounded())
+            plot.runs.append(Run(points: points, emphasis: newest ? 1 : 0.5, tint: slot))
         }
         return plot
     }
@@ -389,8 +407,10 @@ final class UsageGraphView: NSView {
                     started = true
                 }
             }
-            NSColor.systemBlue.withAlphaComponent(run.emphasis).setStroke()
-            path.lineWidth = run.emphasis > 0.9 ? 2 : 1
+            let color = UsagePlot.color(tint: run.tint)
+            let alpha: CGFloat = run.tint == nil ? run.emphasis : 1
+            color.withAlphaComponent(alpha).setStroke()
+            path.lineWidth = run.emphasis > 0.9 ? 2.5 : 1.75
             path.lineJoinStyle = .round
             path.stroke()
             if run.points.count == 1 {
@@ -399,7 +419,7 @@ final class UsageGraphView: NSView {
                     x: area.minX + area.width * min(max(point.x, 0), 1),
                     y: area.maxY - area.height * min(max(point.y, 0), 1)
                 )
-                NSColor.systemBlue.withAlphaComponent(run.emphasis).setFill()
+                color.withAlphaComponent(alpha).setFill()
                 NSBezierPath(ovalIn: NSRect(x: spot.x - 2.5, y: spot.y - 2.5, width: 5, height: 5)).fill()
             }
         }
