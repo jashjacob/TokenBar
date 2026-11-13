@@ -75,11 +75,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         async let todayTask = LimitsClient.fetchToday()
         do {
             let next = mergingGrokBot(try await chipsTask)
-            chips = next
-            missedPolls = 0
-            offline = false
-            lastError = nil
-            Log.line("fetched \(next.count) chips: \(next.map(\.touchTitle).joined(separator: " | "))")
+            // One thin answer, often just the Command Code fill, is TokenTracker mid-refresh.
+            let thin = !bypassFallbackCache && !chips.isEmpty && next.count * 2 < chips.count
+            if thin {
+                missedPolls += 1
+                Log.line("fetch thin: \(next.count) chips, keeping \(chips.count)")
+            }
+            if !thin || missedPolls >= 3 {
+                chips = next
+                missedPolls = 0
+                offline = false
+                lastError = nil
+                Log.line("fetched \(next.count) chips: \(next.map(\.touchTitle).joined(separator: " | "))")
+            }
         } catch {
             missedPolls += 1
             Log.line("fetch failed: \(error.localizedDescription)")

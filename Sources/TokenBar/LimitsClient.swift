@@ -51,6 +51,10 @@ enum LimitsClient {
         } catch {
             trackerError = LimitsError.offline
         }
+        // A miss is not a new feed. Fallbacks fill gaps only after TokenTracker has answered.
+        if let trackerError {
+            throw trackerError
+        }
         // TokenTracker never sends the month, so this fill stays on when the switch is off.
         chips = await fill(
             chips,
