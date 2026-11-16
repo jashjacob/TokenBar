@@ -126,7 +126,7 @@ final class ChipBarView: NSButton {
 
         if ChipPreferences.graphsEnabled, !celebrating {
             drawHeader(in: pad, tint: tint, celebrating: false, trailing: percentLabel)
-            drawGraph(in: NSRect(x: pad.minX, y: pad.minY + 14, width: pad.width, height: max(8, pad.height - 14)), tint: tint)
+            drawGraph(in: NSRect(x: pad.minX, y: pad.minY + 11, width: pad.width, height: max(8, pad.height - 11)), tint: tint)
             return
         }
         if chip.showsStackedFull, !celebrating {
@@ -284,19 +284,22 @@ final class ChipBarView: NSButton {
         }
     }
 
-    /// 0 sits on the bottom of the chip. 100 sits on the top. One line, this window.
+    /// 0 sits on the bottom of the plot. 100 sits on the top. The marks under it are hours or days.
     private func drawGraph(in rect: NSRect, tint: NSColor) {
+        let axis = chip.graphAxis
+        let labelH: CGFloat = axis == nil ? 0 : 7
+        let plot = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: max(4, rect.height - labelH))
         let line = UsageLog.windowLine(
             id: chip.id,
             resetAt: chip.resetAt,
-            windowSeconds: chip.windowSeconds,
+            windowSeconds: axis?.seconds ?? chip.windowSeconds,
             percent: chip.percent
         )
         guard let first = line.first else { return }
         func spot(_ point: (x: CGFloat, y: CGFloat)) -> NSPoint {
             NSPoint(
-                x: rect.minX + rect.width * point.x,
-                y: rect.maxY - rect.height * point.y
+                x: plot.minX + plot.width * point.x,
+                y: plot.maxY - plot.height * point.y
             )
         }
         let path = NSBezierPath()
@@ -314,6 +317,33 @@ final class ChipBarView: NSButton {
             tint.setFill()
             NSBezierPath(ovalIn: NSRect(x: end.x - 1.75, y: end.y - 1.75, width: 3.5, height: 3.5)).fill()
         }
+        if let axis {
+            drawAxis(axis, plot: plot, tint: tint)
+        }
+    }
+
+    private func drawAxis(_ axis: (seconds: Double, unit: String, end: Int), plot: NSRect, tint: NSColor) {
+        guard axis.end > 0 else { return }
+        let steps = axis.end <= 8 ? Array(0...axis.end) : [0, axis.end / 2, axis.end]
+        tint.withAlphaComponent(0.4).setFill()
+        for step in steps {
+            let x = plot.minX + plot.width * CGFloat(step) / CGFloat(axis.end)
+            NSBezierPath(rect: NSRect(x: x - 0.4, y: plot.maxY - 2, width: 0.8, height: 2)).fill()
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 7, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.62),
+        ]
+        let left = "0\(axis.unit)" as NSString
+        let right = "\(axis.end)\(axis.unit)" as NSString
+        let y = plot.maxY - 1
+        left.draw(at: NSPoint(x: plot.minX, y: y), withAttributes: attrs)
+        let rightW = right.size(withAttributes: attrs).width
+        right.draw(at: NSPoint(x: plot.maxX - rightW, y: y), withAttributes: attrs)
+        guard axis.end > 8, plot.width > 78 else { return }
+        let mid = "\(axis.end / 2)\(axis.unit)" as NSString
+        let midW = mid.size(withAttributes: attrs).width
+        mid.draw(at: NSPoint(x: plot.midX - midW / 2, y: y), withAttributes: attrs)
     }
 
     private func drawBar(in pad: NSRect, tint: NSColor, celebrating: Bool) {

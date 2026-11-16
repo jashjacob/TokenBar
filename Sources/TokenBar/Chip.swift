@@ -180,6 +180,26 @@ struct Chip: Equatable, Identifiable {
         return min(6, Int(elapsed / 86_400))
     }
 
+    /// The scale drawn under a chip's line. Hours for a 5h window, days for a week or a month.
+    var graphAxis: (seconds: Double, unit: String, end: Int)? {
+        if let seconds = windowSeconds, seconds >= 3600 {
+            if seconds < 36 * 3600 {
+                let hours = max(1, Int((seconds / 3600).rounded()))
+                return (Double(hours) * 3600, "h", hours)
+            }
+            let days = max(1, Int((seconds / 86_400).rounded()))
+            return (Double(days) * 86_400, "d", days)
+        }
+        switch windowTag {
+        case "5h": return (5 * 3600, "h", 5)
+        case "7d", "wk": return (7 * 86_400, "d", 7)
+        case "mo": return (30 * 86_400, "d", 30)
+        default:
+            if showsWeekMark { return (7 * 86_400, "d", 7) }
+            return nil
+        }
+    }
+
     /// Any window at 100%. The bar and the percent are redundant, so the card stacks.
     var showsStackedFull: Bool {
         Int(percent.rounded()) >= 100
