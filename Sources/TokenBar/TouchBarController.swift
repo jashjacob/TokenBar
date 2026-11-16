@@ -168,6 +168,13 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         }
     }
 
+    /// Redraws the chips after Graphs is toggled. The quota numbers stay as they were.
+    func reloadStrip() {
+        let showTokens = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayTokensID)
+        let showCost = !offline && today != nil && ChipPreferences.isVisible(ChipPreferences.todayCostID)
+        stripView?.apply(chips: chips, today: today, showTokens: showTokens, showCost: showCost, dimmed: offline)
+    }
+
     func tick() {
         let live = chips.map { $0.withClock(previousReset: snapshots[$0.id]?.resetAt) }
         stripView?.tick(chips: live, today: today)

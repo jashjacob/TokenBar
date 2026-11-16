@@ -9,9 +9,19 @@ enum ChipPreferences {
     private static let insightHiddenKey = "insightHiddenIDs"
     private static let migratedTodayKey = "migratedTodaySplit"
     private static let fallbacksKey = "fallbacksEnabled"
+    private static let graphsKey = "chipGraphs"
 
     /// Off means TokenBar never calls OpenCode, Grok, Cursor, Kimi, Codex, Antigravity, or Claude itself.
     /// Command Code still fills, because TokenTracker does not send the month.
+    /// On draws a 0–100 line on each Touch Bar chip. Starts on so the mode can be seen.
+    static var graphsEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: graphsKey) != nil else { return true }
+            return UserDefaults.standard.bool(forKey: graphsKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: graphsKey) }
+    }
+
     static var fallbacksEnabled: Bool {
         get {
             guard UserDefaults.standard.object(forKey: fallbacksKey) != nil else { return true }

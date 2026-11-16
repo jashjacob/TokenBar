@@ -59,6 +59,44 @@ enum UsageLog {
         return chips
     }
 
+    /// One line for the chip's current window. x and y are both 0...1.
+    /// y is the used percent. x runs from the start of the window to its reset.
+    static func windowLine(
+        id: String,
+        resetAt: Date?,
+        windowSeconds: Double?,
+        percent: Double,
+        now: Date = Date()
+    ) -> [(x: CGFloat, y: CGFloat)] {
+        load()
+        let run = runs(chips[id]?.points ?? []).last ?? []
+        let end = resetAt?.timeIntervalSince1970
+        let span = windowSeconds.flatMap { $0 > 0 ? $0 : nil }
+        let start = end.flatMap { end in span.map { end - $0 } } ?? run.first?.t
+        let width = span ?? {
+            guard let start, let last = run.last?.t, last > start else { return nil }
+            return last - start
+        }()
+        func place(_ t: TimeInterval, _ p: Double) -> (x: CGFloat, y: CGFloat)? {
+            guard let start, let width, width > 0 else { return nil }
+            let x = CGFloat(min(max((t - start) / width, 0), 1))
+            let y = CGFloat(min(max(p, 0), 100) / 100)
+            return (x, y)
+        }
+        var line = run.compactMap { place($0.t, $0.p) }
+        if let live = place(now.timeIntervalSince1970, percent) {
+            if let last = line.last, abs(last.x - live.x) < 0.01, abs(last.y - live.y) < 0.005 {
+                line[line.count - 1] = live
+            } else {
+                line.append(live)
+            }
+        }
+        if line.isEmpty {
+            line = [(1, CGFloat(min(max(percent, 0), 100) / 100))]
+        }
+        return line
+    }
+
     static func shouldKeep(previous: Sample?, percent: Double, reset: TimeInterval?, now: TimeInterval) -> Bool {
         guard let previous else { return true }
         if now - previous.t >= heartbeat { return true }

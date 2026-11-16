@@ -98,6 +98,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 }
             } else if row.title == "Pin Touch Bar" {
                 row.state = touchBar.isPinned ? .on : .off
+            } else if row.title == "Graphs" {
+                row.state = ChipPreferences.graphsEnabled ? .on : .off
             }
         }
     }
@@ -152,6 +154,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         pin.target = self
         pin.state = touchBar.isPinned ? .on : .off
         menu.addItem(pin)
+
+        let graphs = NSMenuItem(title: "Graphs", action: #selector(toggleGraphs), keyEquivalent: "")
+        graphs.target = self
+        graphs.state = ChipPreferences.graphsEnabled ? .on : .off
+        menu.addItem(graphs)
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(refreshClicked), keyEquivalent: "r")
         refresh.target = self
@@ -234,6 +241,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         touchBar.isPinned.toggle()
         refreshOpenMenu()
         onRefresh(false)
+    }
+
+    @objc private func toggleGraphs() {
+        ChipPreferences.graphsEnabled.toggle()
+        touchBar.reloadStrip()
+        refreshOpenMenu()
     }
 
     @objc private func insightsClicked() {

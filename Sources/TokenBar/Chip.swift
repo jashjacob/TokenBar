@@ -166,6 +166,20 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
+    /// GrokBot's feed has no 7d tag. The window behind it is still a week.
+    var showsWeekMark: Bool {
+        shortName == "GrokBot" && windowTag == nil
+    }
+
+    /// Which of the seven days is underway, counted from the reset. Nil without a clock.
+    var weekDayIndex: Int? {
+        guard showsWeekMark, let remaining, remaining > 0 else { return nil }
+        let week: TimeInterval = 7 * 24 * 3600
+        let elapsed = week - remaining
+        if elapsed <= 0 { return 0 }
+        return min(6, Int(elapsed / 86_400))
+    }
+
     /// Any window at 100%. The bar and the percent are redundant, so the card stacks.
     var showsStackedFull: Bool {
         Int(percent.rounded()) >= 100
