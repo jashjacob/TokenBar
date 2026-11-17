@@ -634,7 +634,13 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if pacePending || leftoverPending { return [] }
         let choices: [LeftoverBanner.Choice] = chips.compactMap { chip in
             guard !skipping.contains(chip.id), let remaining = chip.remaining, let reset = chip.resetAt else { return nil }
-            guard LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: remaining) else { return nil }
+            guard LeftoverBanner.qualifies(
+                id: chip.id,
+                windowTag: chip.windowTag,
+                percent: chip.percent,
+                remaining: remaining,
+                resetAt: reset
+            ) else { return nil }
             let unused = 100 - min(max(chip.percent, 0), 100)
             return LeftoverBanner.Choice(id: chip.id, resetAt: reset, remaining: remaining, unused: unused)
         }
@@ -742,7 +748,13 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if let renewalSentence {
             text = renewalSentence
             self.renewalSentence = nil
-        } else if LeftoverBanner.qualifies(id: chip.id, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0) {
+        } else if LeftoverBanner.qualifies(
+            id: chip.id,
+            windowTag: chip.windowTag,
+            percent: chip.percent,
+            remaining: chip.remaining ?? 0,
+            resetAt: chip.resetAt
+        ) {
             text = LeftoverBanner.sentence(id: chip.id, label: chip.label, windowTag: chip.windowTag, percent: chip.percent, remaining: chip.remaining ?? 0)
         } else {
             leftoverPending = false

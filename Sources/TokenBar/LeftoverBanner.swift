@@ -9,6 +9,12 @@ enum LeftoverBanner {
     static let grokMinimumUnused: Double = 10
     /// The label is just "GrokBot", but the window behind it is always 7 days.
     static let grokBotID = "cursor.quaternary_window"
+    /// Recent pace, not the whole week. Two hours shows whether this sitting will finish it.
+    static let grokBotLookback: TimeInterval = 2 * 3600
+    /// The usage log keeps a point about every 20 minutes. A shorter gap is not a pace.
+    static let grokBotMinSpan: TimeInterval = 20 * 60
+    /// One more line in the last two hours, after an earlier warning for this same reset.
+    static let grokBotCloseHorizon: TimeInterval = 2 * 3600
     /// A week or a month. The last day is the warning.
     static let weekHorizon: TimeInterval = 24 * 3600
     static let weekMinimumUnused: Double = 20
@@ -30,8 +36,18 @@ enum LeftoverBanner {
     }
 
     /// More than half is still unused and only a few hours remain.
-    static func isClose(_ choice: Choice) -> Bool {
-        choice.remaining <= closeHorizon && choice.unused > weekEarlyMinimumUnused
+    /// GrokBot can speak again in its last two hours when the recent pace still leaves some.
+    static func isClose(_ choice: Choice, now: Date = Date()) -> Bool {
+        if choice.remaining <= closeHorizon && choice.unused > weekEarlyMinimumUnused {
+            return true
+        }
+        guard choice.id == grokBotID, choice.remaining <= grokBotCloseHorizon else { return false }
+        return grokBotLeavesSome(
+            percent: 100 - choice.unused,
+            remaining: choice.remaining,
+            resetAt: choice.resetAt,
+            now: now
+        )
     }
 
     struct History {
@@ -71,7 +87,15 @@ enum LeftoverBanner {
     }
 
     /// Five-hour chips come back the same afternoon, so they never qualify.
-    static func qualifies(id: String, windowTag: String?, percent: Double, remaining: TimeInterval) -> Bool {
+    /// GrokBot also qualifies when the recent pace will not finish what is left.
+    static func qualifies(
+        id: String,
+        windowTag: String?,
+        percent: Double,
+        remaining: TimeInterval,
+        resetAt: Date? = nil,
+        now: Date = Date()
+    ) -> Bool {
         guard remaining > floor else { return false }
         let unused = 100 - min(max(percent, 0), 100)
         if id == grokID, remaining <= grokHorizon, percent > 0, unused >= grokMinimumUnused {
@@ -81,9 +105,48 @@ enum LeftoverBanner {
         if week, remaining < weekEarlyHorizon, unused > weekEarlyMinimumUnused {
             return true
         }
-        let closing = week || windowTag == "mo"
-        guard closing, remaining <= weekHorizon else { return false }
-        return unused >= weekMinimumUnused
+        if (week || windowTag == "mo"), remaining <= weekHorizon, unused >= weekMinimumUnused {
+            return true
+        }
+        guard id == grokBotID else { return false }
+        return grokBotLeavesSome(percent: percent, remaining: remaining, resetAt: resetAt, now: now)
+    }
+
+    /// True when GrokBot still shows at least 1% unused and the recent pace lands short of 100%.
+    /// No trustworthy pace in the final two hours still counts: the leftover is there.
+    static func grokBotLeavesSome(
+        percent: Double,
+        remaining: TimeInterval,
+        resetAt: Date?,
+        samples: [UsageLog.Sample]? = nil,
+        now: Date = Date()
+    ) -> Bool {
+        guard remaining > floor, let resetAt else { return false }
+        let used = min(max(percent, 0), 100)
+        guard Int((100 - used).rounded()) >= 1 else { return false }
+        let points = samples ?? (UsageLog.stored()[grokBotID]?.points ?? [])
+        let nowT = now.timeIntervalSince1970
+        let resetT = resetAt.timeIntervalSince1970
+        guard let run = UsageLog.runs(points).last,
+              let end = run.last,
+              UsageLog.sameReset(end.r, resetT)
+        else {
+            return remaining <= grokBotCloseHorizon
+        }
+        let recent = run.filter { sample in
+            let age = nowT - sample.t
+            return age >= 0 && age <= grokBotLookback
+        }
+        guard let oldest = recent.first else {
+            return remaining <= grokBotCloseHorizon
+        }
+        let span = nowT - oldest.t
+        guard span >= grokBotMinSpan else {
+            return remaining <= grokBotCloseHorizon
+        }
+        let projected = used + ((used - oldest.p) / span) * remaining
+        let landed = min(max(projected, 0), 100)
+        return Int((100 - landed).rounded()) >= 1
     }
 
     static func sentence(id: String, label: String, windowTag: String?, percent: Double, remaining: TimeInterval) -> String {
