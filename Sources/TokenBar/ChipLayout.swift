@@ -210,13 +210,11 @@ enum ChipLayout {
         ]).width
         if ChipPreferences.graphsEnabled {
             var inner = nameW
-            if let tag = chip.windowTag {
+            if let tag = chip.displayTag {
                 let tagW = (tag as NSString).size(withAttributes: [
                     .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
                 ]).width + 6
                 inner += 3 + tagW
-            } else if chip.showsWeekMark {
-                inner += 3 + WeekMark.width
             }
             let percentW = (String(format: "%.0f%%", chip.percent) as NSString).size(withAttributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
@@ -225,25 +223,21 @@ enum ChipLayout {
         }
         if chip.showsStackedFull {
             var top = nameW
-            if let tag = chip.windowTag {
+            if let tag = chip.displayTag {
                 let tagW = (tag as NSString).size(withAttributes: [
                     .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
                 ]).width + 6
                 top += 3 + tagW
-            } else if chip.showsWeekMark {
-                top += 3 + WeekMark.width
             }
             let bottom = chip.remaining == nil ? 0 : timeW
             return ceil(10 + max(top, bottom))
         }
         var inner = nameW
-        if let tag = chip.windowTag {
+        if let tag = chip.displayTag {
             let tagW = (tag as NSString).size(withAttributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold),
             ]).width + 6
             inner += 3 + tagW
-        } else if chip.showsWeekMark {
-            inner += 3 + WeekMark.width
         }
         return ceil(10 + inner + 6 + timeW)
     }

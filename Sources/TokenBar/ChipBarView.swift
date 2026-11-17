@@ -1,14 +1,5 @@
 import AppKit
 
-/// Seven day tabs for a week that has no 7d reading. GrokBot is that chip.
-enum WeekMark {
-    static let count = 7
-    static let tabWidth: CGFloat = 3
-    static let gap: CGFloat = 1
-    static let tabHeight: CGFloat = 5
-    static var width: CGFloat { tabWidth * CGFloat(count) + gap * CGFloat(count - 1) }
-}
-
 /// Compact Touch Bar chip: name + 5h/7d tag, countdown, colored usage line.
 final class ChipBarView: NSButton {
     var chip: Chip {
@@ -155,10 +146,9 @@ final class ChipBarView: NSButton {
             .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold),
             .foregroundColor: tint,
         ]
-        let tag = chip.windowTag.map { $0 as NSString }
+        let tag = chip.displayTag.map { $0 as NSString }
         let tagSize = tag?.size(withAttributes: tagAttrs) ?? .zero
-        let week = chip.showsWeekMark && tag == nil
-        let tagReserve: CGFloat = tag == nil ? (week ? WeekMark.width + 4 : 0) : tagSize.width + 8
+        let tagReserve: CGFloat = tag == nil ? 0 : tagSize.width + 8
         let shown = Self.name(for: chip, budget: max(0, pad.width - tagReserve), attrs: nameAttrs)
         let shownW = shown.size(withAttributes: nameAttrs).width
         var x = pad.minX
@@ -171,8 +161,6 @@ final class ChipBarView: NSButton {
             tint.withAlphaComponent(0.22).setFill()
             NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3).fill()
             tag.draw(at: NSPoint(x: pill.minX + 3, y: pad.minY), withAttributes: tagAttrs)
-        } else if week {
-            drawWeekMark(x: x, y: pad.minY, height: 12, tint: tint)
         }
         guard chip.remaining != nil else { return }
         let time = chip.countdownText as NSString
@@ -191,8 +179,7 @@ final class ChipBarView: NSButton {
     }
 
     private func drawHeader(in pad: NSRect, tint: NSColor, celebrating: Bool, trailing: String?) {
-        let tag = chip.windowTag.map { $0 as NSString }
-        let week = chip.showsWeekMark && tag == nil
+        let tag = chip.displayTag.map { $0 as NSString }
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
             .foregroundColor: NSColor.white,
@@ -207,7 +194,7 @@ final class ChipBarView: NSButton {
         ]
 
         let tagSize = tag?.size(withAttributes: tagAttrs) ?? .zero
-        let tagReserve: CGFloat = tag == nil ? (week ? WeekMark.width + 4 : 0) : tagSize.width + 8
+        let tagReserve: CGFloat = tag == nil ? 0 : tagSize.width + 8
         let shownTime = trailing ?? (celebrating ? "RESET" : chip.countdownText)
         let shownCompact = trailing ?? (celebrating ? "RESET" : chip.compactCountdownText)
         let fullTime = shownTime as NSString
@@ -249,39 +236,9 @@ final class ChipBarView: NSButton {
             tint.withAlphaComponent(0.22).setFill()
             NSBezierPath(roundedRect: pill, xRadius: 3, yRadius: 3).fill()
             tag.draw(at: NSPoint(x: pill.minX + 3, y: pad.minY + 1), withAttributes: tagAttrs)
-        } else if week {
-            drawWeekMark(x: x, y: pad.minY, height: 13, tint: tint)
         }
 
         time.draw(at: NSPoint(x: pad.maxX - timeW, y: pad.minY + 1), withAttributes: timeAttrs)
-    }
-
-    /// Seven day tabs. Days already past are dim, the current day is solid, the rest are faint.
-    private func drawWeekMark(x: CGFloat, y: CGFloat, height: CGFloat, tint: NSColor) {
-        let top = y + (height - WeekMark.tabHeight) / 2
-        let current = chip.weekDayIndex
-        for i in 0..<WeekMark.count {
-            let rect = NSRect(
-                x: x + CGFloat(i) * (WeekMark.tabWidth + WeekMark.gap),
-                y: top,
-                width: WeekMark.tabWidth,
-                height: WeekMark.tabHeight
-            )
-            let alpha: CGFloat
-            if let current {
-                if i < current {
-                    alpha = 0.45
-                } else if i == current {
-                    alpha = 1
-                } else {
-                    alpha = 0.18
-                }
-            } else {
-                alpha = 0.35
-            }
-            tint.withAlphaComponent(alpha).setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()
-        }
     }
 
     /// 0 sits on the bottom of the plot. 100 sits on the top. The marks under it are hours or days.

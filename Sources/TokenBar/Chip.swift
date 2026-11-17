@@ -166,18 +166,11 @@ struct Chip: Equatable, Identifiable {
         return String(label.dropLast(windowTag.count + 1))
     }
 
-    /// GrokBot's feed has no 7d tag. The window behind it is still a week.
-    var showsWeekMark: Bool {
-        shortName == "GrokBot" && windowTag == nil
-    }
-
-    /// Which of the seven days is underway, counted from the reset. Nil without a clock.
-    var weekDayIndex: Int? {
-        guard showsWeekMark, let remaining, remaining > 0 else { return nil }
-        let week: TimeInterval = 7 * 24 * 3600
-        let elapsed = week - remaining
-        if elapsed <= 0 { return 0 }
-        return min(6, Int(elapsed / 86_400))
+    /// The pill next to the name. GrokBot's feed has no 7d suffix, and the window is still a week.
+    var displayTag: String? {
+        if let windowTag { return windowTag }
+        if shortName == "GrokBot" { return "7d" }
+        return nil
     }
 
     /// The scale drawn under a chip's line. Hours for a 5h window, days for a week or a month.
@@ -190,13 +183,11 @@ struct Chip: Equatable, Identifiable {
             let days = max(1, Int((seconds / 86_400).rounded()))
             return (Double(days) * 86_400, "d", days)
         }
-        switch windowTag {
+        switch displayTag {
         case "5h": return (5 * 3600, "h", 5)
         case "7d", "wk": return (7 * 86_400, "d", 7)
         case "mo": return (30 * 86_400, "d", 30)
-        default:
-            if showsWeekMark { return (7 * 86_400, "d", 7) }
-            return nil
+        default: return nil
         }
     }
 
